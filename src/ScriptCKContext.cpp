@@ -254,25 +254,84 @@ static CKParameterOperation *CreateCKContextParameterOperation(CKContext *self,
                                                   secondGuid);
 }
 
+static CKERROR DestroyCKContextObject(CKContext *self,
+                                      CKObject *object,
+                                      CKDWORD flags,
+                                      CKDependencies *dependencies) {
+    return RejectCKContextMutation("CKContext::DestroyObject")
+               ? CKERR_INVALIDOPERATION
+               : self->DestroyObject(object, flags, dependencies);
+}
+
+static CKERROR DestroyCKContextObjectDefault(CKContext *self, CKObject *object) {
+    return DestroyCKContextObject(self, object, 0, nullptr);
+}
+
+static CKERROR DestroyCKContextObjectWithFlags(CKContext *self,
+                                               CKObject *object,
+                                               CKDWORD flags) {
+    return DestroyCKContextObject(self, object, flags, nullptr);
+}
+
+static CKERROR DestroyCKContextObjectById(CKContext *self,
+                                          CK_ID id,
+                                          CKDWORD flags,
+                                          CKDependencies *dependencies) {
+    return RejectCKContextMutation("CKContext::DestroyObject")
+               ? CKERR_INVALIDOPERATION
+               : self->DestroyObject(id, flags, dependencies);
+}
+
+static CKERROR DestroyCKContextObjectByIdDefault(CKContext *self, CK_ID id) {
+    return DestroyCKContextObjectById(self, id, 0, nullptr);
+}
+
+static CKERROR DestroyCKContextObjectByIdWithFlags(CKContext *self,
+                                                   CK_ID id,
+                                                   CKDWORD flags) {
+    return DestroyCKContextObjectById(self, id, flags, nullptr);
+}
+
+static CKERROR DestroyCKContextObjects(CKContext *self,
+                                       const XObjectArray &objects,
+                                       CKDWORD flags,
+                                       CKDependencies *dependencies) {
+    return RejectCKContextMutation("CKContext::DestroyObjects")
+               ? CKERR_INVALIDOPERATION
+               : self->DestroyObjects(objects.Begin(), objects.Size(), flags, dependencies);
+}
+
+static CKERROR DestroyCKContextObjectsDefault(CKContext *self,
+                                              const XObjectArray &objects) {
+    return DestroyCKContextObjects(self, objects, 0, nullptr);
+}
+
+static CKERROR DestroyCKContextObjectsWithFlags(CKContext *self,
+                                                const XObjectArray &objects,
+                                                CKDWORD flags) {
+    return DestroyCKContextObjects(self, objects, flags, nullptr);
+}
+
 void RegisterCKContext(asIScriptEngine *engine) {
     int r = 0;
 
     // Objects Management
-    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CreateObject(CK_CLASSID cid, const string &in name = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)", asFUNCTIONPR([](CKContext *self, CK_CLASSID cid, const std::string &name, CK_OBJECTCREATION_OPTIONS options, CK_CREATIONMODE &res) -> CKObject * { if (RejectCKContextMutation("CKContext::CreateObject")) return nullptr; return self->CreateObject(cid, name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()), options, &res); }, (CKContext *, CK_CLASSID, const std::string &, CK_OBJECTCREATION_OPTIONS, CK_CREATIONMODE &), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)", asFUNCTIONPR([](CKContext *self, CK_CLASSID cid, const std::string &name, CK_OBJECTCREATION_OPTIONS options, CK_CREATIONMODE &res) -> CKObject * { if (RejectCKContextMutation("CKContext::CreateObject")) return nullptr; return self->CreateObject(cid, name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()), options, &res); }, (CKContext *, CK_CLASSID, const std::string &, CK_OBJECTCREATION_OPTIONS, CK_CREATIONMODE &), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, CKDependencies &in dependencies = void, const string &in appendName = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTIONPR([](CKContext *self, CKObject *src, CKDependencies *dependencies, const std::string &appendName, CK_OBJECTCREATION_OPTIONS options) -> CKObject * { if (RejectCKContextMutation("CKContext::CopyObject")) return nullptr; return self->CopyObject(src, dependencies, appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str()), options); }, (CKContext *, CKObject *, CKDependencies *, const std::string &, CK_OBJECTCREATION_OPTIONS), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CKDependencies &in dependencies = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = void)", asFUNCTIONPR([](CKContext *self, const XObjectArray &srcObjects, CKDependencies *dependencies, CK_OBJECTCREATION_OPTIONS options, const std::string &appendName) -> const XObjectArray & { if (RejectCKContextMutation("CKContext::CopyObjects")) { static XObjectArray empty; return empty; } return self->CopyObjects(srcObjects, dependencies, options, appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str())); }, (CKContext *, const XObjectArray &, CKDependencies *, CK_OBJECTCREATION_OPTIONS, const std::string &), const XObjectArray &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ GetObject(CK_ID id)", asMETHODPR(CKContext, GetObject, (CK_ID), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetObjectCount()", asMETHODPR(CKContext, GetObjectCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetObjectSize(CKObject@ obj)", asMETHODPR(CKContext, GetObjectSize, (CKObject*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-#if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *self, CKObject *obj, CKDWORD flags, CKDependencies *dependencies) -> CKERROR { if (RejectCKContextMutation("CKContext::DestroyObject")) return CKERR_INVALIDOPERATION; return self->DestroyObject(obj, flags, dependencies); }, (CKContext *, CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *self, CK_ID id, CKDWORD flags, CKDependencies *dependencies) -> CKERROR { if (RejectCKContextMutation("CKContext::DestroyObject")) return CKERR_INVALIDOPERATION; return self->DestroyObject(id, flags, dependencies); }, (CKContext *, CK_ID, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-#else
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *self, CKObject *obj, DWORD flags, CKDependencies *dependencies) -> CKERROR { if (RejectCKContextMutation("CKContext::DestroyObject")) return CKERR_INVALIDOPERATION; return self->DestroyObject(obj, flags, dependencies); }, (CKContext *, CKObject *, DWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *self, CK_ID id, DWORD flags, CKDependencies *dependencies) -> CKERROR { if (RejectCKContextMutation("CKContext::DestroyObject")) return CKERR_INVALIDOPERATION; return self->DestroyObject(id, flags, dependencies); }, (CKContext *, CK_ID, DWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-#endif
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, CKDWORD flags, CKDependencies *deps) -> CKERROR { if (RejectCKContextMutation("CKContext::DestroyObjects")) return CKERR_INVALIDOPERATION; return self->DestroyObjects(objects.Begin(), objects.Size(), flags, deps); }, (CKContext *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj)", asFUNCTION(DestroyCKContextObjectDefault), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags)", asFUNCTION(DestroyCKContextObjectWithFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags, CKDependencies &in depoptions)", asFUNCTION(DestroyCKContextObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id)", asFUNCTION(DestroyCKContextObjectByIdDefault), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags)", asFUNCTION(DestroyCKContextObjectByIdWithFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags, CKDependencies &in depoptions)", asFUNCTION(DestroyCKContextObjectById), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids)", asFUNCTION(DestroyCKContextObjectsDefault), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags)", asFUNCTION(DestroyCKContextObjectsWithFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags, CKDependencies &in depoptions)", asFUNCTION(DestroyCKContextObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects()", asFUNCTIONPR([](CKContext *self) { if (RejectCKContextMutation("CKContext::DestroyAllDynamicObjects")) return; self->DestroyAllDynamicObjects(); }, (CKContext *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #else

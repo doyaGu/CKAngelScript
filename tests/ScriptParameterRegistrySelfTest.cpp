@@ -7453,8 +7453,16 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         error = "CKContext self-test could not find the registered type.";
         return false;
     }
-    if (contextType->GetMethodByDecl("CKObject@ CreateObject(CK_CLASSID cid, const string &in name = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)") == nullptr ||
-        contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)") == nullptr ||
+    if (contextType->GetMethodByDecl("CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags, CKDependencies &in depoptions)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CK_ID id)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CK_ID id, CKDWORD flags)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CK_ID id, CKDWORD flags, CKDependencies &in depoptions)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObjects(const XObjectArray &in ids)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags, CKDependencies &in depoptions)") == nullptr ||
         contextType->GetMethodByDecl("CKObject@ GetObject(CK_ID id)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
@@ -7486,10 +7494,20 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "  if (ctx.GetObjectsCountByClassID(CKCID_BEOBJECT) <= 0) return 12;\n"
         "  if (ctx.GetRenderManager() is null || ctx.GetParameterManager() is null) return 13;\n"
         "  if (ctx.GetManagerCount() <= 0) return 14;\n"
+        "  CKObject@ unnamed = ctx.CreateObject(CKCID_OBJECT);\n"
+        "  if (unnamed is null) return 15;\n"
+        "  CK_ID unnamedId = unnamed.GetID();\n"
+        "  if (ctx.DestroyObject(unnamed) != CK_OK) return 16;\n"
+        "  if (ctx.GetObject(unnamedId) !is null) return 17;\n"
+        "  CKObject@ byId = ctx.CreateObject(CKCID_OBJECT, \"__CKAS_CKContextDestroyByIdSelfTest\");\n"
+        "  if (byId is null) return 18;\n"
+        "  CK_ID byIdValue = byId.GetID();\n"
+        "  if (ctx.DestroyObject(byIdValue, 0) != CK_OK) return 19;\n"
+        "  if (ctx.GetObject(byIdValue) !is null) return 20;\n"
         "  CKDependencies deps;\n"
-        "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 15;\n"
-        "  if (ctx.GetObject(id) !is null) return 16;\n"
-        "  if (ctx.GetObjectCount() > beforeCount + 1) return 17;\n"
+        "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 21;\n"
+        "  if (ctx.GetObject(id) !is null) return 22;\n"
+        "  if (ctx.GetObjectCount() > beforeCount + 1) return 23;\n"
         "  return 0;\n"
         "}\n"
         "int ProbeCKContextNativeBufferLoaders(CKContext@ ctx) {\n"

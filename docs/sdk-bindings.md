@@ -27,6 +27,8 @@ if (entity !is null) {
 
 Use raw pointers near the operation and do not cache them long-term. High-level `ObjectRef@` handles intentionally do not convert back to raw CK pointers.
 
+Optional native pointer parameters are exposed as explicit AngelScript overloads when the pointee is a value type. For example, `CKContext.DestroyObject(object)` selects the SDK defaults, while the three-argument overload accepts an explicit `CKDependencies` value. This avoids pretending that AngelScript's `void` placeholder can satisfy an input reference; `void` is valid only for an omitted output reference.
+
 ## Prefer High-Level APIs First
 
 | Task | Prefer |

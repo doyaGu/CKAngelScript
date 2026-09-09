@@ -131131,11 +131131,11 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckobject@ createobject(int cid, const string&in name = void, ck_objectcreation_options options = ck_objectcreation_nonamecheck, ck_loadmode&out res = void)",
+          "docId": "method::::ckcontext::ckobject@ createobject(int cid, const string&in name = \"\", ck_objectcreation_options options = ck_objectcreation_nonamecheck, ck_loadmode&out res = void)",
           "name": "CreateObject",
           "namespace": "",
-          "declaration": "CKObject@ CreateObject(int cid, const string&in name = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE&out res = void)",
-          "declarationWithNamespace": "CKObject@ CreateObject(int cid, const string&in name = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE&out res = void)",
+          "declaration": "CKObject@ CreateObject(int cid, const string&in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE&out res = void)",
+          "declarationWithNamespace": "CKObject@ CreateObject(int cid, const string&in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE&out res = void)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -131170,7 +131170,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": "\"\""
             },
             {
               "index": 2,
@@ -131262,11 +131262,48 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror destroyobject(ckobject@ obj, uint flags = 0, ckdependencies&in depoptions = void)",
+          "docId": "method::::ckcontext::ckerror destroyobject(ckobject@ obj)",
           "name": "DestroyObject",
           "namespace": "",
-          "declaration": "CKERROR DestroyObject(CKObject@ obj, uint flags = 0, CKDependencies&in depoptions = void)",
-          "declarationWithNamespace": "CKERROR DestroyObject(CKObject@ obj, uint flags = 0, CKDependencies&in depoptions = void)",
+          "declaration": "CKERROR DestroyObject(CKObject@ obj)",
+          "declarationWithNamespace": "CKERROR DestroyObject(CKObject@ obj)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "obj",
+              "type": "CKObject@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobject(ckobject@ obj, uint flags)",
+          "name": "DestroyObject",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObject(CKObject@ obj, uint flags)",
+          "declarationWithNamespace": "CKERROR DestroyObject(CKObject@ obj, uint flags)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -131298,7 +131335,52 @@
               "type": "uint",
               "flags": 0,
               "flagNames": [],
-              "defaultArg": "0"
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobject(ckobject@ obj, uint flags, ckdependencies&in depoptions)",
+          "name": "DestroyObject",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObject(CKObject@ obj, uint flags, CKDependencies&in depoptions)",
+          "declarationWithNamespace": "CKERROR DestroyObject(CKObject@ obj, uint flags, CKDependencies&in depoptions)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "obj",
+              "type": "CKObject@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "flags",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
             },
             {
               "index": 2,
@@ -131308,7 +131390,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             }
           ],
           "apiCategory": "global",
@@ -131317,11 +131399,48 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror destroyobject(uint id, uint flags = 0, ckdependencies&in depoptions = void)",
+          "docId": "method::::ckcontext::ckerror destroyobject(uint id)",
           "name": "DestroyObject",
           "namespace": "",
-          "declaration": "CKERROR DestroyObject(uint id, uint flags = 0, CKDependencies&in depoptions = void)",
-          "declarationWithNamespace": "CKERROR DestroyObject(uint id, uint flags = 0, CKDependencies&in depoptions = void)",
+          "declaration": "CKERROR DestroyObject(uint id)",
+          "declarationWithNamespace": "CKERROR DestroyObject(uint id)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobject(uint id, uint flags)",
+          "name": "DestroyObject",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObject(uint id, uint flags)",
+          "declarationWithNamespace": "CKERROR DestroyObject(uint id, uint flags)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -131353,7 +131472,52 @@
               "type": "uint",
               "flags": 0,
               "flagNames": [],
-              "defaultArg": "0"
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobject(uint id, uint flags, ckdependencies&in depoptions)",
+          "name": "DestroyObject",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObject(uint id, uint flags, CKDependencies&in depoptions)",
+          "declarationWithNamespace": "CKERROR DestroyObject(uint id, uint flags, CKDependencies&in depoptions)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "flags",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
             },
             {
               "index": 2,
@@ -131363,7 +131527,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             }
           ],
           "apiCategory": "global",
@@ -131372,11 +131536,51 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror destroyobjects(const xobjectarray&in ids, uint flags = 0, ckdependencies&in depoptions = void)",
+          "docId": "method::::ckcontext::ckerror destroyobjects(const xobjectarray&in ids)",
           "name": "DestroyObjects",
           "namespace": "",
-          "declaration": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags = 0, CKDependencies&in depoptions = void)",
-          "declarationWithNamespace": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags = 0, CKDependencies&in depoptions = void)",
+          "declaration": "CKERROR DestroyObjects(const XObjectArray&in ids)",
+          "declarationWithNamespace": "CKERROR DestroyObjects(const XObjectArray&in ids)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "ids",
+              "type": "XObjectArray",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobjects(const xobjectarray&in ids, uint flags)",
+          "name": "DestroyObjects",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags)",
+          "declarationWithNamespace": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -131411,7 +131615,55 @@
               "type": "uint",
               "flags": 0,
               "flagNames": [],
-              "defaultArg": "0"
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror destroyobjects(const xobjectarray&in ids, uint flags, ckdependencies&in depoptions)",
+          "name": "DestroyObjects",
+          "namespace": "",
+          "declaration": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags, CKDependencies&in depoptions)",
+          "declarationWithNamespace": "CKERROR DestroyObjects(const XObjectArray&in ids, uint flags, CKDependencies&in depoptions)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "ids",
+              "type": "XObjectArray",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "flags",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
             },
             {
               "index": 2,
@@ -131421,7 +131673,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             }
           ],
           "apiCategory": "global",
