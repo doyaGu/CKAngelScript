@@ -4337,6 +4337,246 @@ static void InverseTransformManyCK3dEntity(const T *self, NativeBuffer *dest, Na
 }
 
 template <typename T>
+static bool SetCK3dEntityParent(T *self, CK3dEntity *parent, bool keepWorldPosition) {
+    return RejectCKObjectMutation("CK3dEntity::SetParent")
+               ? false
+               : self->SetParent(parent, keepWorldPosition);
+}
+
+template <typename T>
+static bool AddCK3dEntityChild(T *self, CK3dEntity *child, bool keepWorldPosition) {
+    return RejectCKObjectMutation("CK3dEntity::AddChild")
+               ? false
+               : self->AddChild(child, keepWorldPosition);
+}
+
+template <typename T>
+static bool AddCK3dEntityChildren(T *self,
+                                  const XObjectPointerArray &children,
+                                  bool keepWorldPosition) {
+    return RejectCKObjectMutation("CK3dEntity::AddChildren")
+               ? false
+               : self->AddChildren(children, keepWorldPosition);
+}
+
+template <typename T>
+static bool RemoveCK3dEntityChild(T *self, CK3dEntity *child) {
+    return RejectCKObjectMutation("CK3dEntity::RemoveChild")
+               ? false
+               : self->RemoveChild(child);
+}
+
+template <typename T>
+static void LookAtWithCK3dEntity(T *self,
+                                 const VxVector &position,
+                                 CK3dEntity *reference,
+                                 bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::LookAt")) {
+        self->LookAt(&position, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void RotateCK3dEntity(T *self,
+                             float x,
+                             float y,
+                             float z,
+                             float angle,
+                             CK3dEntity *reference,
+                             bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::Rotate")) {
+        self->Rotate3f(x, y, z, angle, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void RotateCK3dEntityAroundAxis(T *self,
+                                       const VxVector &axis,
+                                       float angle,
+                                       CK3dEntity *reference,
+                                       bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::Rotate")) {
+        self->Rotate(&axis, angle, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void TranslateCK3dEntity(T *self,
+                                float x,
+                                float y,
+                                float z,
+                                CK3dEntity *reference,
+                                bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::Translate")) {
+        self->Translate3f(x, y, z, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void TranslateCK3dEntityByVector(T *self,
+                                        const VxVector &translation,
+                                        CK3dEntity *reference,
+                                        bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::Translate")) {
+        self->Translate(&translation, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void AddCK3dEntityScale(T *self,
+                               float x,
+                               float y,
+                               float z,
+                               bool keepChildren,
+                               bool local) {
+    if (!RejectCKObjectMutation("CK3dEntity::AddScale")) {
+        self->AddScale3f(x, y, z, keepChildren, local);
+    }
+}
+
+template <typename T>
+static void AddCK3dEntityScaleVector(T *self,
+                                     const VxVector &scale,
+                                     bool keepChildren,
+                                     bool local) {
+    if (!RejectCKObjectMutation("CK3dEntity::AddScale")) {
+        self->AddScale(&scale, keepChildren, local);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityPosition(T *self,
+                                  float x,
+                                  float y,
+                                  float z,
+                                  CK3dEntity *reference,
+                                  bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetPosition")) {
+        self->SetPosition3f(x, y, z, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityPositionVector(T *self,
+                                        const VxVector &position,
+                                        CK3dEntity *reference,
+                                        bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetPosition")) {
+        self->SetPosition(&position, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityOrientation(T *self,
+                                     const VxVector &direction,
+                                     const VxVector &up,
+                                     const VxVector *right,
+                                     CK3dEntity *reference,
+                                     bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetOrientation")) {
+        self->SetOrientation(&direction, &up, right, reference, keepChildren);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityQuaternion(T *self,
+                                    const VxQuaternion &quaternion,
+                                    CK3dEntity *reference,
+                                    bool keepChildren,
+                                    bool keepScale) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetQuaternion")) {
+        self->SetQuaternion(&quaternion, reference, keepChildren, keepScale);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityScale(T *self,
+                               float x,
+                               float y,
+                               float z,
+                               bool keepChildren,
+                               bool local) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetScale")) {
+        self->SetScale3f(x, y, z, keepChildren, local);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityScaleVector(T *self,
+                                     const VxVector &scale,
+                                     bool keepChildren,
+                                     bool local) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetScale")) {
+        self->SetScale(&scale, keepChildren, local);
+    }
+}
+
+template <typename T>
+static bool ConstructCK3dEntityWorldMatrix(T *self,
+                                            const VxVector &position,
+                                            const VxVector &scale,
+                                            const VxQuaternion &quaternion) {
+    return RejectCKObjectMutation("CK3dEntity::ConstructWorldMatrix")
+               ? false
+               : self->ConstructWorldMatrix(&position, &scale, &quaternion);
+}
+
+template <typename T>
+static bool ConstructCK3dEntityWorldMatrixEx(T *self,
+                                              const VxVector &position,
+                                              const VxVector &scale,
+                                              const VxQuaternion &quaternion,
+                                              const VxQuaternion &shear,
+                                              float sign) {
+    return RejectCKObjectMutation("CK3dEntity::ConstructWorldMatrixEx")
+               ? false
+               : self->ConstructWorldMatrixEx(&position, &scale, &quaternion, &shear, sign);
+}
+
+template <typename T>
+static bool ConstructCK3dEntityLocalMatrix(T *self,
+                                            const VxVector &position,
+                                            const VxVector &scale,
+                                            const VxQuaternion &quaternion) {
+    return RejectCKObjectMutation("CK3dEntity::ConstructLocalMatrix")
+               ? false
+               : self->ConstructLocalMatrix(&position, &scale, &quaternion);
+}
+
+template <typename T>
+static bool ConstructCK3dEntityLocalMatrixEx(T *self,
+                                              const VxVector &position,
+                                              const VxVector &scale,
+                                              const VxQuaternion &quaternion,
+                                              const VxQuaternion &shear,
+                                              float sign) {
+    return RejectCKObjectMutation("CK3dEntity::ConstructLocalMatrixEx")
+               ? false
+               : self->ConstructLocalMatrixEx(&position, &scale, &quaternion, &shear, sign);
+}
+
+template <typename T>
+static void SetCK3dEntityLocalMatrix(T *self, const VxMatrix &matrix, bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetLocalMatrix")) {
+        self->SetLocalMatrix(matrix, keepChildren);
+    }
+}
+
+template <typename T>
+static void SetCK3dEntityWorldMatrix(T *self, const VxMatrix &matrix, bool keepChildren) {
+    if (!RejectCKObjectMutation("CK3dEntity::SetWorldMatrix")) {
+        self->SetWorldMatrix(matrix, keepChildren);
+    }
+}
+
+template <typename T>
+static void ChangeCK3dEntityReferential(T *self, CK3dEntity *reference) {
+    if (!RejectCKObjectMutation("CK3dEntity::ChangeReferential")) {
+        self->ChangeReferential(reference);
+    }
+}
+
+template <typename T>
 void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);
 
@@ -4347,12 +4587,12 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "int GetChildrenCount() const", asMETHODPR(T, GetChildrenCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetChild(int pos) const", asMETHODPR(T, GetChild, (int) const, CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, CK3dEntity *parent, bool keepWorldPos) -> bool { return self->SetParent(parent, keepWorldPos); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)", asFUNCTIONPR(SetCK3dEntityParent<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetParent() const", asFUNCTIONPR([](T *self) -> CK3dEntity * { return self->GetParent(); }, (T *), CK3dEntity *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, CK3dEntity *child, bool keepWorldPos) -> bool { return self->AddChild(child, keepWorldPos); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool AddChildren(const XObjectPointerArray &in children, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, const XObjectPointerArray &children, bool keepWorldPos) -> bool { return self->AddChildren(children, keepWorldPos); }, (T *, const XObjectPointerArray &, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool RemoveChild(CK3dEntity@ mov)", asFUNCTIONPR([](T *self, CK3dEntity *mov) -> bool { return self->RemoveChild(mov); }, (T *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", asFUNCTIONPR(AddCK3dEntityChild<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool AddChildren(const XObjectPointerArray &in children, bool keepWorldPos = true)", asFUNCTIONPR(AddCK3dEntityChildren<T>, (T *, const XObjectPointerArray &, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool RemoveChild(CK3dEntity@ mov)", asFUNCTIONPR(RemoveCK3dEntityChild<T>, (T *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const", asFUNCTIONPR([](T *self, CK3dEntity *mov, bool sameOrder) -> bool { return self->CheckIfSameKindOfHierarchy(mov, sameOrder); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ HierarchyParser(CK3dEntity@ current) const", asMETHODPR(T, HierarchyParser, (CK3dEntity *) const, CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -4390,35 +4630,35 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKERROR AddMesh(CKMesh@ mesh)", asMETHODPR(T, AddMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR RemoveMesh(CKMesh@ mesh)", asMETHODPR(T, RemoveMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void LookAt(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &pos, CK3dEntity *ref, bool keepChildren) { self->LookAt(&pos, ref, keepChildren); }, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void LookAt(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(LookAtWithCK3dEntity<T>, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void Rotate(float x, float y, float z, float angle, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, float x, float y, float z, float angle, CK3dEntity *ref, bool keepChildren) { self->Rotate3f(x, y, z, angle, ref, keepChildren); }, (T *, float, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void Rotate(const VxVector &in axis, float angle, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &axis, float angle, CK3dEntity *ref, bool keepChildren) { self->Rotate(&axis, angle, ref, keepChildren); }, (T *, const VxVector &, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Rotate(float x, float y, float z, float angle, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(RotateCK3dEntity<T>, (T *, float, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Rotate(const VxVector &in axis, float angle, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(RotateCK3dEntityAroundAxis<T>, (T *, const VxVector &, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void Translate(float x, float y, float z, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, float x, float y, float z, CK3dEntity *ref, bool keepChildren) { self->Translate3f(x, y, z, ref, keepChildren); }, (T *, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void Translate(const VxVector &in vect, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &vect, CK3dEntity *ref, bool keepChildren) { self->Translate(&vect, ref, keepChildren); }, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Translate(float x, float y, float z, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(TranslateCK3dEntity<T>, (T *, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Translate(const VxVector &in vect, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(TranslateCK3dEntityByVector<T>, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void AddScale(float x, float y, float z, bool keepChildren = false, bool local = true)", asFUNCTIONPR([](T *self, float x, float y, float z, bool keepChildren, bool local) { self->AddScale3f(x, y, z, keepChildren, local); }, (T *, float, float, float, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void AddScale(const VxVector &in scale, bool keepChildren = false, bool local = true)", asFUNCTIONPR([](T *self, const VxVector &scale, bool keepChildren, bool local) { self->AddScale(&scale, keepChildren, local); }, (T *, const VxVector &, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void AddScale(float x, float y, float z, bool keepChildren = false, bool local = true)", asFUNCTIONPR(AddCK3dEntityScale<T>, (T *, float, float, float, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void AddScale(const VxVector &in scale, bool keepChildren = false, bool local = true)", asFUNCTIONPR(AddCK3dEntityScaleVector<T>, (T *, const VxVector &, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetPosition(float x, float y, float z, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, float x, float y, float z, CK3dEntity *ref, bool keepChildren) { self->SetPosition3f(x, y, z, ref, keepChildren); }, (T *, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetPosition(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &pos, CK3dEntity *ref, bool keepChildren) { self->SetPosition(&pos, ref, keepChildren); }, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetPosition(float x, float y, float z, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityPosition<T>, (T *, float, float, float, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetPosition(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityPositionVector<T>, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetPosition(VxVector&out Pos, CK3dEntity@ Ref = null) const", asMETHODPR(T, GetPosition, (VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetOrientation(const VxVector &in dir, const VxVector &in up, const VxVector &in right = void, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &dir, const VxVector &up, const VxVector *right, CK3dEntity *ref, bool keepChildren) { self->SetOrientation(&dir, &up, right, ref, keepChildren); }, (T *, const VxVector &, const VxVector &, const VxVector *, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOrientation(const VxVector &in dir, const VxVector &in up, const VxVector &in right = void, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityOrientation<T>, (T *, const VxVector &, const VxVector &, const VxVector *, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetOrientation(VxVector &out dir, VxVector &out up, VxVector &out right = void, CK3dEntity@ ref = null)", asMETHODPR(T, GetOrientation, (VxVector *, VxVector *, VxVector *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetQuaternion(const VxQuaternion &in quat, CK3dEntity@ ref = null, bool keepChildren = false, bool keepScale = false)", asFUNCTIONPR([](T *self, const VxQuaternion &quat, CK3dEntity *ref, bool keepChildren, bool keepScale) { self->SetQuaternion(&quat, ref, keepChildren, keepScale); }, (T *, const VxQuaternion &, CK3dEntity *, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetQuaternion(const VxQuaternion &in quat, CK3dEntity@ ref = null, bool keepChildren = false, bool keepScale = false)", asFUNCTIONPR(SetCK3dEntityQuaternion<T>, (T *, const VxQuaternion &, CK3dEntity *, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetQuaternion(VxQuaternion &out quat, CK3dEntity@ ref = null)", asMETHODPR(T, GetQuaternion, (VxQuaternion*, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetScale(float x, float y, float z, bool keepChildren = false, bool local = true)", asFUNCTIONPR([](T *self, float x, float y, float z, bool keepChildren, bool local) { self->SetScale3f(x, y, z, keepChildren, local); }, (T *, float, float, float, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetScale(const VxVector &in scale, bool keepChildren = false, bool local = true)", asFUNCTIONPR([](T *self, const VxVector &scale, bool keepChildren, bool local) { self->SetScale(&scale, keepChildren, local); }, (T *, const VxVector &, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetScale(float x, float y, float z, bool keepChildren = false, bool local = true)", asFUNCTIONPR(SetCK3dEntityScale<T>, (T *, float, float, float, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetScale(const VxVector &in scale, bool keepChildren = false, bool local = true)", asFUNCTIONPR(SetCK3dEntityScaleVector<T>, (T *, const VxVector &, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetScale(VxVector &out scale, bool local = true)", asFUNCTIONPR([](T *self, VxVector &scale, bool local) { self->GetScale(&scale, local); }, (T *, VxVector&, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool ConstructWorldMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat) -> bool { return self->ConstructWorldMatrix(&pos, &scale, &quat); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool ConstructWorldMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat, const VxQuaternion &shear, float sign) -> bool { return self->ConstructWorldMatrixEx(&pos, &scale, &quat, &shear, sign); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat) -> bool { return self->ConstructLocalMatrix(&pos, &scale, &quat); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat, const VxQuaternion &shear, float sign) -> bool { return self->ConstructLocalMatrixEx(&pos, &scale, &quat, &shear, sign); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool ConstructWorldMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR(ConstructCK3dEntityWorldMatrix<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool ConstructWorldMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR(ConstructCK3dEntityWorldMatrixEx<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR(ConstructCK3dEntityLocalMatrix<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR(ConstructCK3dEntityLocalMatrixEx<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->Render(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -4427,9 +4667,9 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetLastFrameMatrix() const", asMETHODPR(T, GetLastFrameMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetLocalMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR([](T *self, const VxMatrix &Mat, bool KeepChildren) { self->SetLocalMatrix(Mat, KeepChildren); }, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetLocalMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR(SetCK3dEntityLocalMatrix<T>, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetLocalMatrix() const", asMETHODPR(T, GetLocalMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetWorldMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR([](T *self, const VxMatrix &Mat, bool KeepChildren) { self->SetWorldMatrix(Mat, KeepChildren); }, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetWorldMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR(SetCK3dEntityWorldMatrix<T>, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetWorldMatrix() const", asMETHODPR(T, GetWorldMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetInverseWorldMatrix() const", asMETHODPR(T, GetInverseWorldMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -4439,7 +4679,7 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void InverseTransformVector(VxVector &out dest, const VxVector &in src, CK3dEntity@ ref = null) const", asMETHODPR(T, InverseTransformVector, (VxVector *, const VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(TransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(InverseTransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ChangeReferential(CK3dEntity@ ref = null)", asMETHODPR(T, ChangeReferential, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void ChangeReferential(CK3dEntity@ ref = null)", asFUNCTIONPR(ChangeCK3dEntityReferential<T>, (T *, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKPlace@ GetReferencePlace() const", asMETHODPR(T, GetReferencePlace, () const, CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 

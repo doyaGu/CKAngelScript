@@ -5176,6 +5176,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  void RenameNativeObject() { GetCKContext(0).GetObjectByName(\"__CKAS_ObjectMutationProbe\").SetName(\"__CKAS_ObjectMutationRejected\"); }\n"
         "  void SetNativeParameter() { CKParameter@ p = cast<CKParameter@>(GetCKContext(0).GetObjectByName(\"__CKAS_ParameterMutationProbe\")); p.SetStringValue(\"after\"); }\n"
         "  void ActivateNativeBehavior() { CKBehavior@ b = cast<CKBehavior@>(GetCKContext(0).GetObjectByName(\"__CKAS_BehaviorMutationProbe\")); b.Activate(true, false); }\n"
+        "  void MoveNativeEntity() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityMutationProbe\")); e.SetPosition(4.0f, 5.0f, 6.0f); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -6000,6 +6001,66 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !behaviorStillInactive ||
         !behaviorMutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CKBehavior activation to preserve runtime state.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void MoveNativeEntity()";
+    CKAngelScriptMethod *moveNativeEntityMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &moveNativeEntityMethod, &result) != CKAS_OK ||
+        !moveNativeEntityMethod) {
+        error = "CKAngelScript API self-test failed to find MoveNativeEntity object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *entityMutationProbeName = "__CKAS_EntityMutationProbe";
+    CK3dEntity *entityMutationProbe = CK3dEntity::Cast(
+        context->CreateObject(CKCID_3DOBJECT,
+                              const_cast<CKSTRING>(entityMutationProbeName),
+                              CK_OBJECTCREATION_DYNAMIC));
+    if (!entityMutationProbe) {
+        error = "CKAngelScript API self-test could not initialize the CK3dEntity mutation probe.";
+        api->ReleaseMethod(moveNativeEntityMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    VxVector entityPositionBefore;
+    entityMutationProbe->GetPosition(&entityPositionBefore, nullptr);
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CK3dEntity mutation filter.";
+        context->DestroyObject(entityMutationProbe);
+        api->ReleaseMethod(moveNativeEntityMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = moveNativeEntityMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedEntityStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedEntityError = result.ErrorMessage ? result.ErrorMessage : "";
+    VxVector entityPositionAfter;
+    entityMutationProbe->GetPosition(&entityPositionAfter, nullptr);
+    const bool entityPositionUnchanged =
+        entityPositionAfter.x == entityPositionBefore.x &&
+        entityPositionAfter.y == entityPositionBefore.y &&
+        entityPositionAfter.z == entityPositionBefore.z;
+    const bool entityMutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(entityMutationProbe);
+    api->ReleaseMethod(moveNativeEntityMethod);
+    if (rejectedEntityStatus != CKAS_EXECUTIONFAILED ||
+        rejectedEntityError.find("CK3dEntity::SetPosition is not available in the current script host phase") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CK3dEntity::SetPosition") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        !entityPositionUnchanged ||
+        !entityMutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CK3dEntity movement to preserve its transform.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;
