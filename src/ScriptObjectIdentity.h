@@ -15,6 +15,7 @@ enum class ScriptBridgeObjectStampFlags : CKDWORD {
     PrototypeGuid = 1u << 2,
     OperationGuid = 1u << 3,
     OwnerId = 1u << 4,
+    Generation = 1u << 5,
 };
 
 inline CKDWORD ScriptBridgeObjectStampFlagMask(ScriptBridgeObjectStampFlags flag) {
@@ -37,6 +38,7 @@ inline void SetScriptBridgeObjectStampFlag(CKDWORD &flags,
 
 struct ScriptBridgeObjectStamp {
     std::uintptr_t Address = 0;
+    std::uint64_t Generation = 0;
     CKDWORD Flags = 0;
     CK_CLASSID ClassId = 0;
     CK_ID OwnerId = 0;
@@ -63,6 +65,10 @@ struct ScriptBridgeStampedObjectId {
 };
 
 using ScriptBridgeStampedObjectRef = ScriptBridgeStampedObjectId;
+
+std::uint64_t GetBridgeObjectIdentityGeneration(CKContext *context, CK_ID id);
+void AdvanceBridgeObjectIdentityGeneration(CKContext *context, CK_ID id);
+void ClearBridgeObjectIdentityGenerations(CKContext *context);
 
 enum class ScriptBridgeObjectResolvePolicy {
     LiveOnly,

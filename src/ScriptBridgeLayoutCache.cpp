@@ -49,8 +49,9 @@ bool RequestNeedsConfiguredLayout(const ScriptBridgeBBInvocationSpec &request) {
 }
 
 std::string LayoutStampKey(const ScriptBridgeObjectStamp &stamp) {
-    return fmt::format("{}:{}:{}:{}:{}:{}:{}",
+    return fmt::format("{}:{}:{}:{}:{}:{}:{}:{}",
                        stamp.Address,
+                       stamp.Generation,
                        stamp.Flags,
                        stamp.ClassId,
                        stamp.OwnerId,

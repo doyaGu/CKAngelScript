@@ -1,6 +1,34 @@
 #include "ScriptObjectIdentity.h"
 
+#include <unordered_map>
+
 #include "CKAll.h"
+
+namespace {
+
+using ObjectGenerationMap = std::unordered_map<CK_ID, std::uint64_t>;
+std::unordered_map<CKContext *, ObjectGenerationMap> g_ObjectIdentityGenerations;
+
+} // namespace
+
+std::uint64_t GetBridgeObjectIdentityGeneration(CKContext *context, CK_ID id) {
+    const auto contextIt = g_ObjectIdentityGenerations.find(context);
+    if (contextIt == g_ObjectIdentityGenerations.end()) {
+        return 0;
+    }
+    const auto objectIt = contextIt->second.find(id);
+    return objectIt == contextIt->second.end() ? 0 : objectIt->second;
+}
+
+void AdvanceBridgeObjectIdentityGeneration(CKContext *context, CK_ID id) {
+    if (context && id) {
+        ++g_ObjectIdentityGenerations[context][id];
+    }
+}
+
+void ClearBridgeObjectIdentityGenerations(CKContext *context) {
+    g_ObjectIdentityGenerations.erase(context);
+}
 
 ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
     ScriptBridgeObjectStamp stamp;
@@ -9,6 +37,9 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
     }
 
     stamp.Address = reinterpret_cast<std::uintptr_t>(object);
+    stamp.Generation =
+        GetBridgeObjectIdentityGeneration(object->GetCKContext(), object->GetID());
+    stamp.Set(ScriptBridgeObjectStampFlags::Generation, true);
     stamp.ClassId = object->GetClassID();
     stamp.Set(ScriptBridgeObjectStampFlags::ClassId, true);
 
@@ -61,6 +92,17 @@ bool BridgeObjectStampMatches(CKObject *object,
     }
     if (stamp.Address && reinterpret_cast<std::uintptr_t>(object) != stamp.Address) {
         return false;
+    }
+    if (stamp.Has(ScriptBridgeObjectStampFlags::Generation)) {
+        const std::uint64_t generation =
+            GetBridgeObjectIdentityGeneration(object->GetCKContext(), object->GetID());
+        const bool resolvingDeletion =
+            policy == ScriptBridgeObjectResolvePolicy::IncludePendingDeletion &&
+            object->IsToBeDeleted() &&
+            generation == stamp.Generation + 1;
+        if (generation != stamp.Generation && !resolvingDeletion) {
+            return false;
+        }
     }
     if (stamp.Has(ScriptBridgeObjectStampFlags::ClassId) && object->GetClassID() != stamp.ClassId) {
         return false;

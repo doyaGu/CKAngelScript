@@ -17,6 +17,7 @@
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
 #include "ScriptMessage.h"
+#include "ScriptObjectIdentity.h"
 #include "ScriptAsync.h"
 
 #if CKAS_BUILD_SELF_TESTS
@@ -193,6 +194,7 @@ CKERROR ScriptManager::SequenceToBeDeleted(CK_ID *objids, int count) {
     }
 
     for (int i = 0; i < count; ++i) {
+        AdvanceBridgeObjectIdentityGeneration(m_Context, objids[i]);
         CKBehavior *behavior = CKBehavior::Cast(m_Context->GetObject(objids[i]));
         if (!behavior) {
             continue;
@@ -302,8 +304,10 @@ int ScriptManager::Init() {
 }
 
 int ScriptManager::Shutdown() {
-    if (!IsInited())
+    if (!IsInited()) {
+        ClearBridgeObjectIdentityGenerations(m_Context);
         return -2;
+    }
 
     m_ResetOrphanCleanupPending = false;
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because the script manager is shutting down.");
@@ -333,6 +337,7 @@ int ScriptManager::Shutdown() {
 
     m_EngineHost.ShutdownAndReleaseEngine();
     m_EngineHost.MarkExtensionsInactive();
+    ClearBridgeObjectIdentityGenerations(m_Context);
 
     m_Flags &= ~AS_INITED;
     return 0;

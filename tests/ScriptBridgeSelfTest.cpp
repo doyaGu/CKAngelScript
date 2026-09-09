@@ -4050,7 +4050,9 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     }
     const CK_ID stampParamId = stampParam->GetID();
     ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(stampParam);
-    if (stamp.Address == 0 || GetStampedCKObjectById(context, stampParamId, stamp) != stampParam) {
+    if (stamp.Address == 0 ||
+        !stamp.Has(ScriptBridgeObjectStampFlags::Generation) ||
+        GetStampedCKObjectById(context, stampParamId, stamp) != stampParam) {
         context->DestroyObject(stampParam);
         error = "Parameter stamp self-test failed to resolve the original object.";
         return false;
@@ -4070,6 +4072,10 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
     context->DestroyObject(stampParam);
+    if (GetBridgeObjectIdentityGeneration(context, stampParamId) == stamp.Generation) {
+        error = "Parameter stamp self-test did not advance object identity on deletion.";
+        return false;
+    }
 
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-parameter-conversion", std::string());
     if (!RunScriptParameterConversionNativeSelfTest(context, error)) {

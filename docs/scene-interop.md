@@ -4,7 +4,7 @@
 
 ## Object Refs
 
-`ObjectRef@` stores the source `CKContext`, object id, native object address, and object stamp. Each accessor revalidates the object so deleted or reused ids become invalid.
+`ObjectRef@` stores the source `CKContext`, object id, deletion generation, native object address, and object stamp. The manager advances the generation from CK's deletion notification, so an old ref stays invalid even if a later object reuses both the id and allocator address. Each accessor revalidates the complete identity.
 
 ```angelscript
 ObjectRef@ ref = Scene::Find(ctx, "Ball");
