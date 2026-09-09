@@ -425,6 +425,19 @@ bool ScriptManager::RejectActiveHostCall(const char *apiName, CKDWORD flags) {
     return manager ? manager->RejectHostCall(apiName, flags) : false;
 }
 
+bool ScriptManager::RejectActiveHostMutation(const char *apiName) {
+    if (!RejectActiveHostCall(apiName, CKAS_HOSTCALL_MUTATES_HOST_STATE)) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        const std::string message =
+            fmt::format("{} is not available in the current script host phase.",
+                        apiName ? apiName : "Host mutation");
+        ctx->SetException(message.c_str());
+    }
+    return true;
+}
+
 CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
                                                    CKAngelScriptResult *result) {
     return m_EngineHost.RegisterExtension(*this, extension, result);

@@ -289,6 +289,7 @@ public:
     }
 
     static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
+    static bool RejectActiveHostMutation(const char *apiName);
 
 protected:
     void CancelResetOrphanedAsyncWork();

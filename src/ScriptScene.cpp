@@ -547,7 +547,7 @@ ObjectRef *OwnerImpl(const ScriptHostScope &scope) {
 }
 
 bool RejectSceneMutation(const char *apiName) {
-    return ScriptManager::RejectActiveHostCall(apiName, CKAS_HOSTCALL_MUTATES_HOST_STATE);
+    return ScriptManager::RejectActiveHostMutation(apiName);
 }
 
 ObjectRef *CreateImpl(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic, ScriptBehaviorBridge *bridge = nullptr, CK_ID componentId = 0) {

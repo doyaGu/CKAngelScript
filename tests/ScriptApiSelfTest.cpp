@@ -5167,6 +5167,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
         "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
         "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
+        "  void CreateNativeObject() { GetCKContext(0).CreateObject(CKCID_OBJECT, \"__CKAS_HostMutationProbe\"); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -5765,6 +5766,59 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseMethod(waitMethod);
+
+    constexpr const char *hostMutationProbeName = "__CKAS_HostMutationProbe";
+    if (context->GetObjectByName(const_cast<CKSTRING>(hostMutationProbeName))) {
+        error = "CKAngelScript API self-test host-mutation probe name is already in use.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    methodOptions.MethodDecl = "void CreateNativeObject()";
+    CKAngelScriptMethod *createNativeObjectMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &createNativeObjectMethod, &result) != CKAS_OK ||
+        !createNativeObjectMethod) {
+        error = "CKAngelScript API self-test failed to find CreateNativeObject object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the host-mutation filter.";
+        api->ReleaseMethod(createNativeObjectMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    const int objectCountBeforeRejectedMutation = context->GetObjectCount();
+    objectCall.Method = createNativeObjectMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedMutationStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedMutationError = result.ErrorMessage ? result.ErrorMessage : "";
+    const int objectCountAfterRejectedMutation = context->GetObjectCount();
+    CKObject *unexpectedMutationObject =
+        context->GetObjectByName(const_cast<CKSTRING>(hostMutationProbeName));
+    const bool mutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    api->ReleaseMethod(createNativeObjectMethod);
+    if (unexpectedMutationObject) {
+        context->DestroyObject(unexpectedMutationObject);
+    }
+    if (rejectedMutationStatus != CKAS_EXECUTIONFAILED ||
+        rejectedMutationError.find("CKContext::CreateObject is not available") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKContext::CreateObject") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        objectCountAfterRejectedMutation != objectCountBeforeRejectedMutation ||
+        unexpectedMutationObject ||
+        !mutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKContext mutation to fail before changing host state.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
 
     methodOptions.MethodDecl = "void SpawnDetached()";
     CKAngelScriptMethod *spawnDetachedMethod = nullptr;
