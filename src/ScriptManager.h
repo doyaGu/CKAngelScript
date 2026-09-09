@@ -102,10 +102,6 @@ public:
     asIScriptContext *GetActiveContext();
     CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS SetActiveContextException(const char *message, CKAngelScriptResult *result = nullptr);
-    CKAS_STATUS SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
-                                  void *userData,
-                                  CKAngelScriptResult *result = nullptr);
-    bool RejectHostCall(const char *apiName, CKDWORD flags);
 
     CKAS_STATUS LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS CompileModule(const char *moduleName,
@@ -288,11 +284,6 @@ public:
         return (ScriptManager *) engine->GetUserData(SCRIPT_MANAGER_TYPE);
     }
 
-    static bool RejectActiveHostCall(const char *apiName,
-                                     CKDWORD flags,
-                                     bool *filterSetException = nullptr);
-    static bool RejectActiveHostMutation(const char *apiName);
-
 protected:
     void CancelResetOrphanedAsyncWork();
     void ClearObjectBoundRuntime();
@@ -332,7 +323,6 @@ protected:
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
     int m_MessageOutputSuppressionDepth = 0;
-    std::uint64_t m_ActiveContextExceptionSerial = 0;
     bool m_ResetOrphanCleanupPending = false;
 };
 

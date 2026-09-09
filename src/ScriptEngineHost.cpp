@@ -116,19 +116,6 @@ void ScriptEngineHost::ReleaseContextPool() {
     m_ContextPool.clear();
 }
 
-void ScriptEngineHost::SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
-                                         void *userData) {
-    m_HostCallFilter = callback;
-    m_HostCallFilterUserData = userData;
-}
-
-bool ScriptEngineHost::RejectHostCall(const char *apiName, CKDWORD flags) const {
-    if (!m_HostCallFilter) {
-        return false;
-    }
-    return m_HostCallFilter(apiName, flags, m_HostCallFilterUserData) != CKAS_OK;
-}
-
 CKAS_STATUS ScriptEngineHost::RegisterExtension(ScriptManager &manager,
                                                 const CKAngelScriptEngineExtension &extension,
                                                 CKAngelScriptResult *result) {

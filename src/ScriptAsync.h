@@ -232,7 +232,6 @@ private:
         std::vector<std::string> ContextModuleNames;
     };
 
-    bool RejectTaskCreation() const;
     void ReleaseWaitRecord(WaitRecord &record);
     void RemoveFinishedTrackedTasks();
 

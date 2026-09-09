@@ -237,14 +237,6 @@ struct PublicNativeBox {
     }
 };
 
-struct HostCallFilterProbeData {
-    int CallCount = 0;
-    const char *LastApiName = nullptr;
-    CKDWORD LastFlags = 0;
-    CKAngelScriptApi *Api = nullptr;
-    const char *RejectionMessage = nullptr;
-};
-
 struct MetadataProbe {
     bool Type = false;
     bool Method = false;
@@ -528,23 +520,6 @@ CKAS_STATUS MarkResumeHook(asIScriptContext *ctx, void *userData) {
 
 CKAS_STATUS RejectExecutionConfigure(asIScriptContext *, void *) {
     return CKAS_INVALIDARGUMENT;
-}
-
-CKAS_STATUS HostCallFilterProbe(const char *apiName, CKDWORD flags, void *userData) {
-    auto *data = static_cast<HostCallFilterProbeData *>(userData);
-    if (!data || !apiName || apiName[0] == '\0') {
-        return CKAS_INVALIDARGUMENT;
-    }
-    ++data->CallCount;
-    data->LastApiName = apiName;
-    data->LastFlags = flags;
-    const bool rejected =
-        (flags & (CKAS_HOSTCALL_MUTATES_HOST_STATE |
-                  CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) != 0;
-    if (rejected && data->Api && data->RejectionMessage) {
-        data->Api->SetActiveContextException(data->RejectionMessage);
-    }
-    return rejected ? CKAS_INVALIDSTATE : CKAS_OK;
 }
 
 CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
@@ -1142,6 +1117,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    if (!manager) {
+        error = "CKAngelScript API self-test could not resolve ScriptManager.";
+        return false;
+    }
+
     CKAngelScriptResult result = CKAngelScriptApi::Result();
     if (result.Size != sizeof(result) ||
         result.Status != CKAS_OK ||
@@ -1380,7 +1361,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION != 17 ||
         CKAS_FEATURE_SOURCE_SECTIONS != 18 ||
         CKAS_FEATURE_OBJECT_HANDLE_ARGS != 19 ||
-        CKAS_FEATURE_HOST_CALL_FILTER != 20 ||
         CKAS_FEATURE_MODULE_IMPORTS != 21 ||
         CKAS_FEATURE_MODULE_BYTECODE != 22 ||
         CKAS_FEATURE_MODULE_REPLACE_TRANSACTION != 23 ||
@@ -1394,8 +1374,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
         CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT != 0x00000002 ||
         CKAS_CALL_NO_SUSPEND != 0x00000001 ||
-        CKAS_HOSTCALL_MUTATES_HOST_STATE != 0x00000001 ||
-        CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK != 0x00000002 ||
         CKAS_BYTECODE_DEFAULT != 0 ||
         CKAS_BYTECODE_STRIP_DEBUG_INFO != 0x00000001 ||
         CKAS_BYTECODE_REPLACEEXISTING != 0x00000002 ||
@@ -1424,53 +1402,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION) ||
         !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS) ||
-        !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_IMPORTS) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_BYTECODE) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_GRAPH) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_FINGERPRINT)) {
         error = "CKAngelScript API self-test found an unexpected feature set.";
-        return false;
-    }
-
-    HostCallFilterProbeData hostCallFilterProbe;
-    CKAngelScriptResult hostCallFilterResult = CKAngelScriptApi::Result();
-    ScriptManager *manager = ScriptManager::GetManager(context);
-    if (!manager) {
-        error = "CKAngelScript API self-test could not resolve ScriptManager for host-call filter.";
-        return false;
-    }
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK ||
-        hostCallFilterResult.Status != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install a host-call filter.";
-        return false;
-    }
-    if (manager->RejectHostCall("SelfTest::ReadOnly", CKAS_HOSTCALL_DEFAULT) ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::ReadOnly") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_DEFAULT) {
-        error = "CKAngelScript API self-test expected read-only host calls to pass through the filter.";
-        return false;
-    }
-    if (!manager->RejectHostCall("SelfTest::Mutating", CKAS_HOSTCALL_MUTATES_HOST_STATE) ||
-        hostCallFilterProbe.CallCount != 2 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::Mutating") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE) {
-        error = "CKAngelScript API self-test expected mutating host calls to be rejected by the filter.";
-        return false;
-    }
-    if (!manager->RejectHostCall("SelfTest::Async", CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK) ||
-        hostCallFilterProbe.CallCount != 3 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::Async") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK) {
-        error = "CKAngelScript API self-test expected async scheduling calls to be rejected by the filter.";
-        return false;
-    }
-    if (api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) != CKAS_OK ||
-        hostCallFilterResult.Status != CKAS_OK ||
-        manager->RejectHostCall("SelfTest::AfterClear", CKAS_HOSTCALL_MUTATES_HOST_STATE)) {
-        error = "CKAngelScript API self-test failed to clear the host-call filter.";
         return false;
     }
 
@@ -5172,14 +5109,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
         "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
         "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
-        "  void CreateNativeObject() { GetCKContext(0).CreateObject(CKCID_OBJECT, \"__CKAS_HostMutationProbe\"); }\n"
-        "  void RenameNativeObject() { GetCKContext(0).GetObjectByName(\"__CKAS_ObjectMutationProbe\").SetName(\"__CKAS_ObjectMutationRejected\"); }\n"
-        "  void SetNativeParameter() { CKParameter@ p = cast<CKParameter@>(GetCKContext(0).GetObjectByName(\"__CKAS_ParameterMutationProbe\")); p.SetStringValue(\"after\"); }\n"
-        "  void ActivateNativeBehavior() { CKBehavior@ b = cast<CKBehavior@>(GetCKContext(0).GetObjectByName(\"__CKAS_BehaviorMutationProbe\")); b.Activate(true, false); }\n"
-        "  void MoveNativeEntity() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityMutationProbe\")); e.SetPosition(4.0f, 5.0f, 6.0f); }\n"
-        "  void MakeNativeEntityUnpickable() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityStateProbe\")); e.SetPickable(false); }\n"
-        "  void SetNativeDataArrayElement() { CKDataArray@ a = cast<CKDataArray@>(GetCKContext(0).GetObjectByName(\"__CKAS_DataArrayMutationProbe\")); int value = 99; a.SetElementValue(0, 0, value); }\n"
-        "  void BorrowNativeDataArrayRow() { CKDataArray@ a = cast<CKDataArray@>(GetCKContext(0).GetObjectByName(\"__CKAS_DataArrayMutationProbe\")); a.GetRow(0).Size(); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -5778,515 +5707,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseMethod(waitMethod);
-
-    constexpr const char *hostMutationProbeName = "__CKAS_HostMutationProbe";
-    if (context->GetObjectByName(const_cast<CKSTRING>(hostMutationProbeName))) {
-        error = "CKAngelScript API self-test host-mutation probe name is already in use.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    methodOptions.MethodDecl = "void CreateNativeObject()";
-    CKAngelScriptMethod *createNativeObjectMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &createNativeObjectMethod, &result) != CKAS_OK ||
-        !createNativeObjectMethod) {
-        error = "CKAngelScript API self-test failed to find CreateNativeObject object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the host-mutation filter.";
-        api->ReleaseMethod(createNativeObjectMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    const int objectCountBeforeRejectedMutation = context->GetObjectCount();
-    objectCall.Method = createNativeObjectMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedMutationStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedMutationError = result.ErrorMessage ? result.ErrorMessage : "";
-    const int objectCountAfterRejectedMutation = context->GetObjectCount();
-    CKObject *unexpectedMutationObject =
-        context->GetObjectByName(const_cast<CKSTRING>(hostMutationProbeName));
-    const bool mutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    api->ReleaseMethod(createNativeObjectMethod);
-    if (unexpectedMutationObject) {
-        context->DestroyObject(unexpectedMutationObject);
-    }
-    if (rejectedMutationStatus != CKAS_EXECUTIONFAILED ||
-        rejectedMutationError.find("CKContext::CreateObject is not available") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKContext::CreateObject") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        objectCountAfterRejectedMutation != objectCountBeforeRejectedMutation ||
-        unexpectedMutationObject ||
-        !mutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKContext mutation to fail before changing host state.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void RenameNativeObject()";
-    CKAngelScriptMethod *renameNativeObjectMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &renameNativeObjectMethod, &result) != CKAS_OK ||
-        !renameNativeObjectMethod) {
-        error = "CKAngelScript API self-test failed to find RenameNativeObject object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *objectMutationProbeName = "__CKAS_ObjectMutationProbe";
-    CKObject *objectMutationProbe =
-        context->CreateObject(CKCID_OBJECT,
-                              const_cast<CKSTRING>(objectMutationProbeName),
-                              CK_OBJECTCREATION_DYNAMIC);
-    if (!objectMutationProbe) {
-        error = "CKAngelScript API self-test could not create the CKObject mutation probe.";
-        api->ReleaseMethod(renameNativeObjectMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CKObject mutation filter.";
-        context->DestroyObject(objectMutationProbe);
-        api->ReleaseMethod(renameNativeObjectMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    const int objectCountBeforeRejectedRename = context->GetObjectCount();
-    objectCall.Method = renameNativeObjectMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedRenameStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedRenameError = result.ErrorMessage ? result.ErrorMessage : "";
-    const int objectCountAfterRejectedRename = context->GetObjectCount();
-    const bool objectNameUnchanged =
-        objectMutationProbe->GetName() &&
-        std::strcmp(objectMutationProbe->GetName(), objectMutationProbeName) == 0;
-    const bool objectMutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(objectMutationProbe);
-    api->ReleaseMethod(renameNativeObjectMethod);
-    if (rejectedRenameStatus != CKAS_EXECUTIONFAILED ||
-        rejectedRenameError.find("CKObject::SetName is not available") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKObject::SetName") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        objectCountAfterRejectedRename != objectCountBeforeRejectedRename ||
-        !objectNameUnchanged ||
-        !objectMutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKObject mutation to fail before changing host state.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void SetNativeParameter()";
-    CKAngelScriptMethod *setNativeParameterMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &setNativeParameterMethod, &result) != CKAS_OK ||
-        !setNativeParameterMethod) {
-        error = "CKAngelScript API self-test failed to find SetNativeParameter object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *parameterMutationProbeName = "__CKAS_ParameterMutationProbe";
-    CKParameterLocal *parameterMutationProbe =
-        context->CreateCKParameterLocal(const_cast<CKSTRING>(parameterMutationProbeName),
-                                        CKPGUID_STRING,
-                                        TRUE);
-    if (!parameterMutationProbe ||
-        parameterMutationProbe->SetStringValue(const_cast<CKSTRING>("before")) != CK_OK) {
-        error = "CKAngelScript API self-test could not initialize the CKParameter mutation probe.";
-        if (parameterMutationProbe) {
-            context->DestroyObject(parameterMutationProbe);
-        }
-        api->ReleaseMethod(setNativeParameterMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CKParameter mutation filter.";
-        context->DestroyObject(parameterMutationProbe);
-        api->ReleaseMethod(setNativeParameterMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = setNativeParameterMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedParameterStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedParameterError = result.ErrorMessage ? result.ErrorMessage : "";
-    char parameterValueAfterRejection[32] = {};
-    parameterMutationProbe->GetStringValue(parameterValueAfterRejection, FALSE);
-    const bool parameterMutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(parameterMutationProbe);
-    api->ReleaseMethod(setNativeParameterMethod);
-    if (rejectedParameterStatus != CKAS_EXECUTIONFAILED ||
-        rejectedParameterError.find("CKParameter::SetStringValue is not available") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKParameter::SetStringValue") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        std::strcmp(parameterValueAfterRejection, "before") != 0 ||
-        !parameterMutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKParameter mutation to preserve the value.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void ActivateNativeBehavior()";
-    CKAngelScriptMethod *activateNativeBehaviorMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &activateNativeBehaviorMethod, &result) != CKAS_OK ||
-        !activateNativeBehaviorMethod) {
-        error = "CKAngelScript API self-test failed to find ActivateNativeBehavior object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *behaviorMutationProbeName = "__CKAS_BehaviorMutationProbe";
-    CKBehavior *behaviorMutationProbe =
-        static_cast<CKBehavior *>(context->CreateObject(CKCID_BEHAVIOR,
-                                                        const_cast<CKSTRING>(behaviorMutationProbeName),
-                                                        CK_OBJECTCREATION_DYNAMIC));
-    if (!behaviorMutationProbe || behaviorMutationProbe->IsActive()) {
-        error = "CKAngelScript API self-test could not initialize the CKBehavior mutation probe.";
-        if (behaviorMutationProbe) {
-            context->DestroyObject(behaviorMutationProbe);
-        }
-        api->ReleaseMethod(activateNativeBehaviorMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *behaviorRejectionMessage =
-        "CKBehavior activation rejected by the self-test host phase.";
-    hostCallFilterProbe = HostCallFilterProbeData();
-    hostCallFilterProbe.Api = &api;
-    hostCallFilterProbe.RejectionMessage = behaviorRejectionMessage;
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CKBehavior mutation filter.";
-        context->DestroyObject(behaviorMutationProbe);
-        api->ReleaseMethod(activateNativeBehaviorMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = activateNativeBehaviorMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedBehaviorStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedBehaviorError = result.ErrorMessage ? result.ErrorMessage : "";
-    const bool behaviorStillInactive = !behaviorMutationProbe->IsActive();
-    const bool behaviorMutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(behaviorMutationProbe);
-    api->ReleaseMethod(activateNativeBehaviorMethod);
-    if (rejectedBehaviorStatus != CKAS_EXECUTIONFAILED ||
-        rejectedBehaviorError.find(behaviorRejectionMessage) == std::string::npos ||
-        rejectedBehaviorError.find("CKBehavior::Activate is not available in the current script host phase") != std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKBehavior::Activate") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        !behaviorStillInactive ||
-        !behaviorMutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKBehavior activation to preserve runtime state.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void MoveNativeEntity()";
-    CKAngelScriptMethod *moveNativeEntityMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &moveNativeEntityMethod, &result) != CKAS_OK ||
-        !moveNativeEntityMethod) {
-        error = "CKAngelScript API self-test failed to find MoveNativeEntity object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *entityMutationProbeName = "__CKAS_EntityMutationProbe";
-    CK3dEntity *entityMutationProbe = CK3dEntity::Cast(
-        context->CreateObject(CKCID_3DOBJECT,
-                              const_cast<CKSTRING>(entityMutationProbeName),
-                              CK_OBJECTCREATION_DYNAMIC));
-    if (!entityMutationProbe) {
-        error = "CKAngelScript API self-test could not initialize the CK3dEntity mutation probe.";
-        api->ReleaseMethod(moveNativeEntityMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    VxVector entityPositionBefore;
-    entityMutationProbe->GetPosition(&entityPositionBefore, nullptr);
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CK3dEntity mutation filter.";
-        context->DestroyObject(entityMutationProbe);
-        api->ReleaseMethod(moveNativeEntityMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = moveNativeEntityMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedEntityStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedEntityError = result.ErrorMessage ? result.ErrorMessage : "";
-    VxVector entityPositionAfter;
-    entityMutationProbe->GetPosition(&entityPositionAfter, nullptr);
-    const bool entityPositionUnchanged =
-        entityPositionAfter.x == entityPositionBefore.x &&
-        entityPositionAfter.y == entityPositionBefore.y &&
-        entityPositionAfter.z == entityPositionBefore.z;
-    const bool entityMutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(entityMutationProbe);
-    api->ReleaseMethod(moveNativeEntityMethod);
-    if (rejectedEntityStatus != CKAS_EXECUTIONFAILED ||
-        rejectedEntityError.find("CK3dEntity::SetPosition is not available in the current script host phase") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CK3dEntity::SetPosition") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        !entityPositionUnchanged ||
-        !entityMutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CK3dEntity movement to preserve its transform.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void MakeNativeEntityUnpickable()";
-    CKAngelScriptMethod *makeNativeEntityUnpickableMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &makeNativeEntityUnpickableMethod, &result) != CKAS_OK ||
-        !makeNativeEntityUnpickableMethod) {
-        error = "CKAngelScript API self-test failed to find MakeNativeEntityUnpickable object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *entityStateProbeName = "__CKAS_EntityStateProbe";
-    CK3dEntity *entityStateProbe = CK3dEntity::Cast(
-        context->CreateObject(CKCID_3DOBJECT,
-                              const_cast<CKSTRING>(entityStateProbeName),
-                              CK_OBJECTCREATION_DYNAMIC));
-    if (!entityStateProbe) {
-        error = "CKAngelScript API self-test could not initialize the CK3dEntity state probe.";
-        api->ReleaseMethod(makeNativeEntityUnpickableMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    entityStateProbe->SetPickable(true);
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CK3dEntity state mutation filter.";
-        context->DestroyObject(entityStateProbe);
-        api->ReleaseMethod(makeNativeEntityUnpickableMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = makeNativeEntityUnpickableMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedEntityStateStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedEntityStateError = result.ErrorMessage ? result.ErrorMessage : "";
-    const bool entityRemainsPickable = entityStateProbe->IsPickable();
-    const bool entityStateMutationFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(entityStateProbe);
-    api->ReleaseMethod(makeNativeEntityUnpickableMethod);
-    if (rejectedEntityStateStatus != CKAS_EXECUTIONFAILED ||
-        rejectedEntityStateError.find("CK3dEntity::SetPickable is not available in the current script host phase") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CK3dEntity::SetPickable") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        !entityRemainsPickable ||
-        !entityStateMutationFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CK3dEntity state mutation to preserve pickability.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void SetNativeDataArrayElement()";
-    CKAngelScriptMethod *setNativeDataArrayElementMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &setNativeDataArrayElementMethod, &result) != CKAS_OK ||
-        !setNativeDataArrayElementMethod) {
-        error = "CKAngelScript API self-test failed to find SetNativeDataArrayElement object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    methodOptions.MethodDecl = "void BorrowNativeDataArrayRow()";
-    CKAngelScriptMethod *borrowNativeDataArrayRowMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &borrowNativeDataArrayRowMethod, &result) != CKAS_OK ||
-        !borrowNativeDataArrayRowMethod) {
-        error = "CKAngelScript API self-test failed to find BorrowNativeDataArrayRow object method.";
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *dataArrayMutationProbeName = "__CKAS_DataArrayMutationProbe";
-    CKDataArray *dataArrayMutationProbe = CKDataArray::Cast(
-        context->CreateObject(CKCID_DATAARRAY,
-                              const_cast<CKSTRING>(dataArrayMutationProbeName),
-                              CK_OBJECTCREATION_DYNAMIC));
-    int dataArrayValueBefore = 7;
-    if (!dataArrayMutationProbe) {
-        error = "CKAngelScript API self-test could not create the CKDataArray mutation probe.";
-        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    dataArrayMutationProbe->InsertColumn(-1,
-                                         CKARRAYTYPE_INT,
-                                         const_cast<CKSTRING>("Value"));
-    dataArrayMutationProbe->AddRow();
-    if (!dataArrayMutationProbe->SetElementValue(0, 0, &dataArrayValueBefore)) {
-        error = "CKAngelScript API self-test could not initialize the CKDataArray mutation probe.";
-        context->DestroyObject(dataArrayMutationProbe);
-        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CKDataArray element mutation filter.";
-        context->DestroyObject(dataArrayMutationProbe);
-        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = setNativeDataArrayElementMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedDataArrayElementStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedDataArrayElementError = result.ErrorMessage ? result.ErrorMessage : "";
-    int dataArrayValueAfterElementRejection = 0;
-    const bool dataArrayElementReadable =
-        dataArrayMutationProbe->GetElementValue(0, 0, &dataArrayValueAfterElementRejection) != FALSE;
-    const bool dataArrayElementFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    if (rejectedDataArrayElementStatus != CKAS_EXECUTIONFAILED ||
-        rejectedDataArrayElementError.find("CKDataArray::SetElementValue is not available in the current script host phase") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKDataArray::SetElementValue") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        !dataArrayElementReadable ||
-        dataArrayValueAfterElementRejection != dataArrayValueBefore ||
-        !dataArrayElementFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKDataArray element mutation to preserve the value.";
-        context->DestroyObject(dataArrayMutationProbe);
-        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    hostCallFilterProbe = HostCallFilterProbeData();
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the CKDataArray row-borrow filter.";
-        context->DestroyObject(dataArrayMutationProbe);
-        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-        api->ReleaseMethod(setNativeDataArrayElementMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = borrowNativeDataArrayRowMethod;
-    const CKAS_STATUS rejectedDataArrayRowStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedDataArrayRowError = result.ErrorMessage ? result.ErrorMessage : "";
-    int dataArrayValueAfterRowRejection = 0;
-    const bool dataArrayRowReadable =
-        dataArrayMutationProbe->GetElementValue(0, 0, &dataArrayValueAfterRowRejection) != FALSE;
-    const bool dataArrayRowFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    context->DestroyObject(dataArrayMutationProbe);
-    api->ReleaseMethod(borrowNativeDataArrayRowMethod);
-    api->ReleaseMethod(setNativeDataArrayElementMethod);
-    if (rejectedDataArrayRowStatus != CKAS_EXECUTIONFAILED ||
-        rejectedDataArrayRowError.find("CKDataArray::GetRow is not available in the current script host phase") == std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKDataArray::GetRow") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
-        !dataArrayRowReadable ||
-        dataArrayValueAfterRowRejection != dataArrayValueBefore ||
-        !dataArrayRowFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered CKDataArray row access to reject the mutable view.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-
-    methodOptions.MethodDecl = "void SpawnDetached()";
-    CKAngelScriptMethod *spawnDetachedMethod = nullptr;
-    if (api->FindObjectMethod(methodOptions, &spawnDetachedMethod, &result) != CKAS_OK ||
-        !spawnDetachedMethod) {
-        error = "CKAngelScript API self-test failed to find SpawnDetached object method.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    constexpr const char *asyncRejectionMessage =
-        "Async scheduling rejected by the self-test host phase.";
-    hostCallFilterProbe = HostCallFilterProbeData();
-    hostCallFilterProbe.Api = &api;
-    hostCallFilterProbe.RejectionMessage = asyncRejectionMessage;
-    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
-        error = "CKAngelScript API self-test failed to install the async host-call filter.";
-        api->ReleaseMethod(spawnDetachedMethod);
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
-    objectCall.Method = spawnDetachedMethod;
-    objectCall.WriteArgs = nullptr;
-    objectCall.ReadResult = nullptr;
-    const CKAS_STATUS rejectedAsyncStatus = api->CallObjectMethod(objectCall, &result);
-    const std::string rejectedAsyncError = result.ErrorMessage ? result.ErrorMessage : "";
-    const bool rejectedAsyncClean =
-        manager->GetAsyncScheduler() &&
-        !manager->GetAsyncScheduler()->HasTaskForModule(objectModuleName);
-    const bool asyncFilterCleared =
-        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
-    api->ReleaseMethod(spawnDetachedMethod);
-    if (rejectedAsyncStatus != CKAS_EXECUTIONFAILED ||
-        rejectedAsyncError.find(asyncRejectionMessage) == std::string::npos ||
-        rejectedAsyncError.find("Async work is not available in the current script host phase") != std::string::npos ||
-        hostCallFilterProbe.CallCount != 1 ||
-        !CkasStringEquals(hostCallFilterProbe.LastApiName, "Async::Schedule") ||
-        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK ||
-        !rejectedAsyncClean ||
-        !asyncFilterCleared) {
-        error = "CKAngelScript API self-test expected filtered object calls to reject detached async work without retaining the module.";
-        api->ReleaseMethod(addMethod);
-        api->ReleaseObject(object);
-        return false;
-    }
 
     objectCall.Method = addMethod;
     objectCall.WriteArgs = WriteObjectInt;

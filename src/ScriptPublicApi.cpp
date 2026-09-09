@@ -46,7 +46,6 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION:
         case CKAS_FEATURE_SOURCE_SECTIONS:
         case CKAS_FEATURE_OBJECT_HANDLE_ARGS:
-        case CKAS_FEATURE_HOST_CALL_FILTER:
         case CKAS_FEATURE_MODULE_IMPORTS:
         case CKAS_FEATURE_MODULE_BYTECODE:
         case CKAS_FEATURE_MODULE_REPLACE_TRANSACTION:
@@ -165,17 +164,6 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptSetActiveContextException(CKAngelSc
     ScriptManager *scriptManager = FromPublicHandle(angelScript);
     return scriptManager
                ? scriptManager->SetActiveContextException(message, result)
-               : StoreInvalidPublicHandleResult(result);
-}
-
-extern "C" CKAS_API CKAS_STATUS CKAngelScriptSetHostCallFilter(
-    CKAngelScript *angelScript,
-    CKAngelScriptHostCallFilterCallback callback,
-    void *userData,
-    CKAngelScriptResult *result) {
-    ScriptManager *scriptManager = FromPublicHandle(angelScript);
-    return scriptManager
-               ? scriptManager->SetHostCallFilter(callback, userData, result)
                : StoreInvalidPublicHandleResult(result);
 }
 

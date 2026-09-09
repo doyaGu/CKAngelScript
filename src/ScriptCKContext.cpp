@@ -13,7 +13,6 @@
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
-#include "ScriptManager.h"
 
 static void SetCKContextException(const char *message) {
     if (asIScriptContext *ctx = asGetActiveContext()) {
@@ -35,10 +34,6 @@ static bool ValidateCKContextMemoryBuffer(CKContext *self, int size, NativePoint
         return false;
     }
     return true;
-}
-
-static bool RejectCKContextMutation(const char *method) {
-    return ScriptManager::RejectActiveHostMutation(method);
 }
 
 static bool ValidateCKContextNativeBuffer(CKContext *self, NativeBuffer *buffer, const char *method, int &size) {
@@ -67,9 +62,6 @@ static CKERROR ClearCKContextAll(CKContext *self) {
     if (!self) {
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKContextMutation("CKContext::ClearAll")) {
-        return CKERR_INVALIDOPERATION;
-    }
     InvalidateScriptCKVertexBuffersForManager(self->GetRenderManager());
     return self->ClearAll();
 }
@@ -79,9 +71,6 @@ static CKERROR LoadCKContextFromBuffer(CKContext *self,
                                        NativePointer buffer,
                                        CKObjectArray *objects,
                                        CK_LOAD_FLAGS loadFlags) {
-    if (RejectCKContextMutation("CKContext::Load")) {
-        return CKERR_INVALIDOPERATION;
-    }
     if (!ValidateCKContextMemoryBuffer(self, size, buffer, "CKContext.Load")) {
         return CKERR_INVALIDPARAMETER;
     }
@@ -92,9 +81,6 @@ static CKERROR LoadCKContextFromNativeBuffer(CKContext *self,
                                              NativeBuffer *buffer,
                                              CKObjectArray *objects,
                                              CK_LOAD_FLAGS loadFlags) {
-    if (RejectCKContextMutation("CKContext::Load")) {
-        return CKERR_INVALIDOPERATION;
-    }
     int size = 0;
     if (!ValidateCKContextNativeBuffer(self, buffer, "CKContext.Load", size)) {
         return CKERR_INVALIDPARAMETER;
@@ -128,9 +114,6 @@ static CKERROR LoadCKContextAnimationOnCharacterFromBuffer(CKContext *self,
                                                           CKObjectArray *objects,
                                                           CKCharacter *character,
                                                           bool asDynamicObjects) {
-    if (RejectCKContextMutation("CKContext::LoadAnimationOnCharacter")) {
-        return CKERR_INVALIDOPERATION;
-    }
     if (!ValidateCKContextMemoryBuffer(self, size, buffer, "CKContext.LoadAnimationOnCharacter")) {
         return CKERR_INVALIDPARAMETER;
     }
@@ -142,9 +125,6 @@ static CKERROR LoadCKContextAnimationOnCharacterFromNativeBuffer(CKContext *self
                                                                 CKObjectArray *objects,
                                                                 CKCharacter *character,
                                                                 bool asDynamicObjects) {
-    if (RejectCKContextMutation("CKContext::LoadAnimationOnCharacter")) {
-        return CKERR_INVALIDOPERATION;
-    }
     int size = 0;
     if (!ValidateCKContextNativeBuffer(self, buffer, "CKContext.LoadAnimationOnCharacter", size)) {
         return CKERR_INVALIDPARAMETER;
@@ -157,9 +137,6 @@ static CKERROR LoadCKContextFromFile(CKContext *self,
                                      CKObjectArray *objects,
                                      CK_LOAD_FLAGS loadFlags,
                                      CKGUID *readerGuid) {
-    if (RejectCKContextMutation("CKContext::Load")) {
-        return CKERR_INVALIDOPERATION;
-    }
     return self->Load(const_cast<CKSTRING>(fileName.c_str()), objects, loadFlags, readerGuid);
 }
 
@@ -169,9 +146,6 @@ static CKERROR SaveCKContextToFile(CKContext *self,
                                    CKDWORD saveFlags,
                                    CKDependencies *dependencies,
                                    CKGUID *readerGuid) {
-    if (RejectCKContextMutation("CKContext::Save")) {
-        return CKERR_INVALIDOPERATION;
-    }
     return self->Save(const_cast<CKSTRING>(fileName.c_str()),
                       objects,
                       saveFlags,
@@ -185,9 +159,6 @@ static CKERROR LoadCKContextAnimationOnCharacterFromFile(CKContext *self,
                                                          CKCharacter *character,
                                                          CKGUID *readerGuid,
                                                          bool asDynamicObjects) {
-    if (RejectCKContextMutation("CKContext::LoadAnimationOnCharacter")) {
-        return CKERR_INVALIDOPERATION;
-    }
     return self->LoadAnimationOnCharacter(const_cast<CKSTRING>(fileName.c_str()),
                                           objects,
                                           character,
@@ -199,87 +170,69 @@ static CKParameterIn *CreateCKContextParameterIn(CKContext *self,
                                                 const std::string &name,
                                                 CKParameterType type,
                                                 bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterIn")
-               ? nullptr
-               : self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()), type, dynamic);
+    return self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()), type, dynamic);
 }
 
 static CKParameterIn *CreateCKContextParameterInGuid(CKContext *self,
                                                     const std::string &name,
                                                     CKGUID guid,
                                                     bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterIn")
-               ? nullptr
-               : self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
+    return self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
 }
 
 static CKParameterIn *CreateCKContextParameterInName(CKContext *self,
                                                     const std::string &name,
                                                     const std::string &typeName,
                                                     bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterIn")
-               ? nullptr
-               : self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()),
-                                           const_cast<CKSTRING>(typeName.c_str()),
-                                           dynamic);
+    return self->CreateCKParameterIn(const_cast<CKSTRING>(name.c_str()),
+                                     const_cast<CKSTRING>(typeName.c_str()),
+                                     dynamic);
 }
 
 static CKParameterOut *CreateCKContextParameterOut(CKContext *self,
                                                   const std::string &name,
                                                   CKParameterType type,
                                                   bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterOut")
-               ? nullptr
-               : self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()), type, dynamic);
+    return self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()), type, dynamic);
 }
 
 static CKParameterOut *CreateCKContextParameterOutGuid(CKContext *self,
                                                       const std::string &name,
                                                       CKGUID guid,
                                                       bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterOut")
-               ? nullptr
-               : self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
+    return self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
 }
 
 static CKParameterOut *CreateCKContextParameterOutName(CKContext *self,
                                                       const std::string &name,
                                                       const std::string &typeName,
                                                       bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterOut")
-               ? nullptr
-               : self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()),
-                                            const_cast<CKSTRING>(typeName.c_str()),
-                                            dynamic);
+    return self->CreateCKParameterOut(const_cast<CKSTRING>(name.c_str()),
+                                      const_cast<CKSTRING>(typeName.c_str()),
+                                      dynamic);
 }
 
 static CKParameterLocal *CreateCKContextParameterLocal(CKContext *self,
                                                       const std::string &name,
                                                       CKParameterType type,
                                                       bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterLocal")
-               ? nullptr
-               : self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()), type, dynamic);
+    return self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()), type, dynamic);
 }
 
 static CKParameterLocal *CreateCKContextParameterLocalGuid(CKContext *self,
                                                           const std::string &name,
                                                           CKGUID guid,
                                                           bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterLocal")
-               ? nullptr
-               : self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
+    return self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()), guid, dynamic);
 }
 
 static CKParameterLocal *CreateCKContextParameterLocalName(CKContext *self,
                                                           const std::string &name,
                                                           const std::string &typeName,
                                                           bool dynamic) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterLocal")
-               ? nullptr
-               : self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()),
-                                              const_cast<CKSTRING>(typeName.c_str()),
-                                            dynamic);
+    return self->CreateCKParameterLocal(const_cast<CKSTRING>(name.c_str()),
+                                        const_cast<CKSTRING>(typeName.c_str()),
+                                        dynamic);
 }
 
 static CKParameterOperation *CreateCKContextParameterOperation(CKContext *self,
@@ -288,22 +241,18 @@ static CKParameterOperation *CreateCKContextParameterOperation(CKContext *self,
                                                               CKGUID resultGuid,
                                                               CKGUID firstGuid,
                                                               CKGUID secondGuid) {
-    return RejectCKContextMutation("CKContext::CreateCKParameterOperation")
-               ? nullptr
-               : self->CreateCKParameterOperation(const_cast<CKSTRING>(name.c_str()),
-                                                  operationGuid,
-                                                  resultGuid,
-                                                  firstGuid,
-                                                  secondGuid);
+    return self->CreateCKParameterOperation(const_cast<CKSTRING>(name.c_str()),
+                                            operationGuid,
+                                            resultGuid,
+                                            firstGuid,
+                                            secondGuid);
 }
 
 static CKERROR DestroyCKContextObject(CKContext *self,
                                       CKObject *object,
                                       CKDWORD flags,
                                       CKDependencies *dependencies) {
-    return RejectCKContextMutation("CKContext::DestroyObject")
-               ? CKERR_INVALIDOPERATION
-               : self->DestroyObject(object, flags, dependencies);
+    return self->DestroyObject(object, flags, dependencies);
 }
 
 static CKERROR DestroyCKContextObjectDefault(CKContext *self, CKObject *object) {
@@ -320,9 +269,7 @@ static CKERROR DestroyCKContextObjectById(CKContext *self,
                                           CK_ID id,
                                           CKDWORD flags,
                                           CKDependencies *dependencies) {
-    return RejectCKContextMutation("CKContext::DestroyObject")
-               ? CKERR_INVALIDOPERATION
-               : self->DestroyObject(id, flags, dependencies);
+    return self->DestroyObject(id, flags, dependencies);
 }
 
 static CKERROR DestroyCKContextObjectByIdDefault(CKContext *self, CK_ID id) {
@@ -339,9 +286,7 @@ static CKERROR DestroyCKContextObjects(CKContext *self,
                                        const XObjectArray &objects,
                                        CKDWORD flags,
                                        CKDependencies *dependencies) {
-    return RejectCKContextMutation("CKContext::DestroyObjects")
-               ? CKERR_INVALIDOPERATION
-               : self->DestroyObjects(objects.Begin(), objects.Size(), flags, dependencies);
+    return self->DestroyObjects(objects.Begin(), objects.Size(), flags, dependencies);
 }
 
 static CKERROR DestroyCKContextObjectsDefault(CKContext *self,
@@ -360,9 +305,6 @@ static CKObject *CopyCKContextObject(CKContext *self,
                                      CKDependencies *dependencies,
                                      const std::string &appendName,
                                      CK_OBJECTCREATION_OPTIONS options) {
-    if (RejectCKContextMutation("CKContext::CopyObject")) {
-        return nullptr;
-    }
     return self->CopyObject(source,
                             dependencies,
                             appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str()),
@@ -376,19 +318,11 @@ static CKObject *CopyCKContextObjectWithDefaults(CKContext *self,
     return CopyCKContextObject(self, source, nullptr, appendName, options);
 }
 
-static const XObjectArray &EmptyCKContextObjectArray() {
-    static XObjectArray empty;
-    return empty;
-}
-
 static const XObjectArray &CopyCKContextObjects(CKContext *self,
                                                 const XObjectArray &sourceObjects,
                                                 CKDependencies *dependencies,
                                                 CK_OBJECTCREATION_OPTIONS options,
                                                 const std::string &appendName) {
-    if (RejectCKContextMutation("CKContext::CopyObjects")) {
-        return EmptyCKContextObjectArray();
-    }
     return self->CopyObjects(sourceObjects,
                              dependencies,
                              options,
@@ -407,7 +341,7 @@ void RegisterCKContext(asIScriptEngine *engine) {
     int r = 0;
 
     // Objects Management
-    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)", asFUNCTIONPR([](CKContext *self, CK_CLASSID cid, const std::string &name, CK_OBJECTCREATION_OPTIONS options, CK_CREATIONMODE &res) -> CKObject * { if (RejectCKContextMutation("CKContext::CreateObject")) return nullptr; return self->CreateObject(cid, name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()), options, &res); }, (CKContext *, CK_CLASSID, const std::string &, CK_OBJECTCREATION_OPTIONS, CK_CREATIONMODE &), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)", asFUNCTIONPR([](CKContext *self, CK_CLASSID cid, const std::string &name, CK_OBJECTCREATION_OPTIONS options, CK_CREATIONMODE &res) -> CKObject * { return self->CreateObject(cid, name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()), options, &res); }, (CKContext *, CK_CLASSID, const std::string &, CK_OBJECTCREATION_OPTIONS, CK_CREATIONMODE &), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTION(CopyCKContextObjectWithDefaults), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, CKDependencies &in dependencies, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTION(CopyCKContextObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = \"\")", asFUNCTION(CopyCKContextObjectsWithDefaults), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -426,11 +360,11 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags)", asFUNCTION(DestroyCKContextObjectsWithFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags, CKDependencies &in depoptions)", asFUNCTION(DestroyCKContextObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects()", asFUNCTIONPR([](CKContext *self) { if (RejectCKContextMutation("CKContext::DestroyAllDynamicObjects")) return; self->DestroyAllDynamicObjects(); }, (CKContext *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects()", asMETHODPR(CKContext, DestroyAllDynamicObjects, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects(CKScene@ scene = null)", asFUNCTIONPR([](CKContext *self, CKScene *scene) { if (RejectCKContextMutation("CKContext::DestroyAllDynamicObjects")) return; self->DestroyAllDynamicObjects(scene); }, (CKContext *, CKScene *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects(CKScene@ scene = null)", asMETHODPR(CKContext, DestroyAllDynamicObjects, (CKScene *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod("CKContext", "void ChangeObjectDynamic(CKObject@ obj, bool setDynamic = true)", asFUNCTIONPR([](CKContext *self, CKObject *obj, bool setDynamic) { if (RejectCKContextMutation("CKContext::ChangeObjectDynamic")) return; self->ChangeObjectDynamic(obj, setDynamic); }, (CKContext *, CKObject *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void ChangeObjectDynamic(CKObject@ obj, bool setDynamic = true)", asFUNCTIONPR([](CKContext *self, CKObject *obj, bool setDynamic) { self->ChangeObjectDynamic(obj, setDynamic); }, (CKContext *, CKObject *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKContext", "const XObjectPointerArray &CKFillObjectsUnused()", asMETHODPR(CKContext, CKFillObjectsUnused, (), const XObjectPointerArray &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -444,16 +378,16 @@ void RegisterCKContext(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKContext", "uintptr_t GetObjectsListByClassID(int)", asMETHODPR(CKContext, GetObjectsListByClassID, (CK_CLASSID), CK_ID*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Engine runtime
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Play()", asFUNCTIONPR([](CKContext *self) -> CKERROR { if (RejectCKContextMutation("CKContext::Play")) return CKERR_INVALIDOPERATION; return self->Play(); }, (CKContext *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Pause()", asFUNCTIONPR([](CKContext *self) -> CKERROR { if (RejectCKContextMutation("CKContext::Pause")) return CKERR_INVALIDOPERATION; return self->Pause(); }, (CKContext *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Play()", asMETHODPR(CKContext, Play, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Pause()", asMETHODPR(CKContext, Pause, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset()", asFUNCTIONPR([](CKContext *self) -> CKERROR { if (RejectCKContextMutation("CKContext::Reset")) return CKERR_INVALIDOPERATION; return self->Reset(); }, (CKContext *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset()", asMETHODPR(CKContext, Reset, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset(bool toLevelScene = false)", asFUNCTIONPR([](CKContext *self, bool toLevelScene) -> CKERROR { if (RejectCKContextMutation("CKContext::Reset")) return CKERR_INVALIDOPERATION; return self->Reset(toLevelScene); }, (CKContext *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset(bool toLevelScene = false)", asFUNCTIONPR([](CKContext *self, bool toLevelScene) { return self->Reset(toLevelScene); }, (CKContext *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKContext", "bool IsPlaying()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsPlaying(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsReseted()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsReseted(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Process()", asFUNCTIONPR([](CKContext *self) -> CKERROR { if (RejectCKContextMutation("CKContext::Process")) return CKERR_INVALIDOPERATION; return self->Process(); }, (CKContext *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Process()", asMETHODPR(CKContext, Process, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR ClearAll()", asFUNCTION(ClearCKContextAll), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsInClearAll()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsInClearAll(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -461,7 +395,7 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKLevel@ GetCurrentLevel()", asMETHODPR(CKContext, GetCurrentLevel, (), CKLevel*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKRenderContext@ GetPlayerRenderContext()", asMETHODPR(CKContext, GetPlayerRenderContext, (), CKRenderContext*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKScene@ GetCurrentScene()", asMETHODPR(CKContext, GetCurrentScene, (), CKScene*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetCurrentLevel(CKLevel@ level)", asFUNCTIONPR([](CKContext *self, CKLevel *level) { if (RejectCKContextMutation("CKContext::SetCurrentLevel")) return; self->SetCurrentLevel(level); }, (CKContext *, CKLevel *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetCurrentLevel(CKLevel@ level)", asMETHODPR(CKContext, SetCurrentLevel, (CKLevel*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Object Management functions
     r = engine->RegisterObjectMethod("CKContext", "CKParameterIn@ CreateCKParameterIn(const string &in name, CKParameterType type, bool dynamic = false)", asFUNCTION(CreateCKContextParameterIn), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -475,8 +409,8 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKParameterLocal@ CreateCKParameterLocal(const string &in name, const string &in typeName, bool dynamic = false)", asFUNCTION(CreateCKContextParameterLocalName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKParameterOperation@ CreateCKParameterOperation(const string &in name, CKGUID opguid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid)", asFUNCTION(CreateCKContextParameterOperation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKContext", "CKFile@ CreateCKFile()", asFUNCTIONPR([](CKContext *self) -> CKFile * { if (RejectCKContextMutation("CKContext::CreateCKFile")) return nullptr; return self->CreateCKFile(); }, (CKContext *), CKFile *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR DeleteCKFile(CKFile@ file)", asFUNCTIONPR([](CKContext *self, CKFile *file) -> CKERROR { if (RejectCKContextMutation("CKContext::DeleteCKFile")) return CKERR_INVALIDOPERATION; return self->DeleteCKFile(file); }, (CKContext *, CKFile *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKFile@ CreateCKFile()", asMETHODPR(CKContext, CreateCKFile, (), CKFile*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DeleteCKFile(CKFile@ file)", asMETHODPR(CKContext, DeleteCKFile, (CKFile*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // IHM
     // r = engine->RegisterObjectMethod("CKContext", "void SetInterfaceMode(bool mode = true, uintptr_t = 0, uintptr_t = 0)", asMETHODPR(CKContext, SetInterfaceMode, (CKBOOL, CKUICALLBACKFCT, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -484,18 +418,18 @@ void RegisterCKContext(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKContext", "CKERROR OutputToConsole(const string &in str, bool beep = true)", asFUNCTIONPR([](CKContext *self, const std::string &str, bool beep) { return self->OutputToConsole(const_cast<CKSTRING>(str.c_str()), beep); }, (CKContext *, const std::string &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR OutputToInfo(const string &in format)", asFUNCTIONPR([](CKContext *self, const std::string &info) { return self->OutputToInfo(const_cast<CKSTRING>(info.c_str())); }, (CKContext *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR RefreshBuildingBlocks(const XGUIDArray &in guids)", asFUNCTIONPR([](CKContext *self, const XArray<CKGUID> &guids) -> CKERROR { if (RejectCKContextMutation("CKContext::RefreshBuildingBlocks")) return CKERR_INVALIDOPERATION; return self->RefreshBuildingBlocks(guids); }, (CKContext *, const XArray<CKGUID> &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR RefreshBuildingBlocks(const XGUIDArray &in guids)", asMETHODPR(CKContext, RefreshBuildingBlocks, (const XArray<CKGUID>&), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR ShowSetup(int)", asFUNCTIONPR([](CKContext *self, CK_ID id) -> CKERROR { if (RejectCKContextMutation("CKContext::ShowSetup")) return CKERR_INVALIDOPERATION; return self->ShowSetup(id); }, (CKContext *, CK_ID), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR ShowSetup(int)", asMETHODPR(CKContext, ShowSetup, (CK_ID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKContext", "int ChooseObject(uintptr_t dialogParentWnd)", asMETHODPR(CKContext, ChooseObject, (void *), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR Select(const XObjectArray &in objects, bool clearSelection = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool clearSelection) -> CKERROR { if (RejectCKContextMutation("CKContext::Select")) return CKERR_INVALIDOPERATION; return self->Select(objects, clearSelection); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Select(const XObjectArray &in objects, bool clearSelection = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool clearSelection) { return self->Select(objects, clearSelection); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION != 0x26052005
-    r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2)", asFUNCTIONPR([](CKContext *self, CKDWORD reason, CKDWORD param1, CKDWORD param2) -> CKDWORD { if (RejectCKContextMutation("CKContext::SendInterfaceMessage")) return 0; return self->SendInterfaceMessage(reason, param1, param2); }, (CKContext *, CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2)", asMETHODPR(CKContext, SendInterfaceMessage, (CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2, CKDWORD param3 = 0)", asFUNCTIONPR([](CKContext *self, CKDWORD reason, CKDWORD param1, CKDWORD param2, CKDWORD param3) -> CKDWORD { if (RejectCKContextMutation("CKContext::SendInterfaceMessage")) return 0; return self->SendInterfaceMessage(reason, param1, param2, param3); }, (CKContext *, CKDWORD, CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2, CKDWORD param3 = 0)", asMETHODPR(CKContext, SendInterfaceMessage, (CKDWORD, CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR UICopyObjects(const XObjectArray &in, bool iClearClipboard = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool clearClipboard) -> CKERROR { if (RejectCKContextMutation("CKContext::UICopyObjects")) return CKERR_INVALIDOPERATION; return self->UICopyObjects(objects, clearClipboard); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR UIPasteObjects(const XObjectArray &in)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects) -> CKERROR { if (RejectCKContextMutation("CKContext::UIPasteObjects")) return CKERR_INVALIDOPERATION; return self->UIPasteObjects(objects); }, (CKContext *, const XObjectArray &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR UICopyObjects(const XObjectArray &in, bool iClearClipboard = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool iClearClipboard) { return self->UICopyObjects(objects, iClearClipboard); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR UIPasteObjects(const XObjectArray &in)", asMETHODPR(CKContext, UIPasteObjects, (const XObjectArray&), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Managers
     r = engine->RegisterObjectMethod("CKContext", "CKRenderManager@ GetRenderManager()", asMETHODPR(CKContext, GetRenderManager, (), CKRenderManager*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -515,18 +449,18 @@ void RegisterCKContext(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKContext", "bool IsManagerActive(CKBaseManager@ manager)", asFUNCTIONPR([](CKContext *self, CKBaseManager *manager) -> bool { return self->IsManagerActive(manager); }, (CKContext *, CKBaseManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool HasManagerDuplicates(CKBaseManager@ manager)", asFUNCTIONPR([](CKContext *self, CKBaseManager *manager) -> bool { return self->HasManagerDuplicates(manager); }, (CKContext *, CKBaseManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void ActivateManager(CKBaseManager@ manager, bool active)", asFUNCTIONPR([](CKContext *self, CKBaseManager *manager, bool active) { if (RejectCKContextMutation("CKContext::ActivateManager")) return; self->ActivateManager(manager, active); }, (CKContext *, CKBaseManager *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void ActivateManager(CKBaseManager@ manager, bool active)", asFUNCTIONPR([](CKContext *self, CKBaseManager *manager, bool active) { self->ActivateManager(manager, active); }, (CKContext *, CKBaseManager *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetInactiveManagerCount()", asMETHODPR(CKContext, GetInactiveManagerCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKBaseManager@ GetInactiveManager(int index)", asMETHODPR(CKContext, GetInactiveManager, (int), CKBaseManager*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR RegisterNewManager(CKBaseManager@ manager)", asFUNCTIONPR([](CKContext *self, CKBaseManager *manager) -> CKERROR { if (RejectCKContextMutation("CKContext::RegisterNewManager")) return CKERR_INVALIDOPERATION; return self->RegisterNewManager(manager); }, (CKContext *, CKBaseManager *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR RegisterNewManager(CKBaseManager@ manager)", asMETHODPR(CKContext, RegisterNewManager, (CKBaseManager*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Profiling Functions
-    r = engine->RegisterObjectMethod("CKContext", "void EnableProfiling(bool enable)", asFUNCTIONPR([](CKContext *self, bool enable) { if (RejectCKContextMutation("CKContext::EnableProfiling")) return; self->EnableProfiling(enable); }, (CKContext *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void EnableProfiling(bool enable)", asFUNCTIONPR([](CKContext *self, bool enable) { self->EnableProfiling(enable); }, (CKContext *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsProfilingEnable()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsProfilingEnable(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "void GetProfileStats(CKStats &out stats)", asMETHODPR(CKContext, GetProfileStats, (CKStats*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void UserProfileStart(CKDWORD slot)", asFUNCTIONPR([](CKContext *self, CKDWORD slot) { if (RejectCKContextMutation("CKContext::UserProfileStart")) return; self->UserProfileStart(slot); }, (CKContext *, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "float UserProfileEnd(CKDWORD slot)", asFUNCTIONPR([](CKContext *self, CKDWORD slot) -> float { if (RejectCKContextMutation("CKContext::UserProfileEnd")) return 0.0f; return self->UserProfileEnd(slot); }, (CKContext *, CKDWORD), float), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void UserProfileStart(CKDWORD slot)", asMETHODPR(CKContext, UserProfileStart, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "float UserProfileEnd(CKDWORD slot)", asMETHODPR(CKContext, UserProfileEnd, (CKDWORD), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "float GetLastUserProfileTime(CKDWORD slot)", asMETHODPR(CKContext, GetLastUserProfileTime, (CKDWORD), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Utilities
@@ -536,16 +470,16 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "int GetSelectedRenderEngine()", asMETHODPR(CKContext, GetSelectedRenderEngine, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // File Save/Load Options
-    r = engine->RegisterObjectMethod("CKContext", "void SetCompressionLevel(int level)", asFUNCTIONPR([](CKContext *self, int level) { if (RejectCKContextMutation("CKContext::SetCompressionLevel")) return; self->SetCompressionLevel(level); }, (CKContext *, int), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetCompressionLevel(int level)", asMETHODPR(CKContext, SetCompressionLevel, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetCompressionLevel()", asMETHODPR(CKContext, GetCompressionLevel, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetFileWriteMode(CK_FILE_WRITEMODE mode)", asFUNCTIONPR([](CKContext *self, CK_FILE_WRITEMODE mode) { if (RejectCKContextMutation("CKContext::SetFileWriteMode")) return; self->SetFileWriteMode(mode); }, (CKContext *, CK_FILE_WRITEMODE), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetFileWriteMode(CK_FILE_WRITEMODE mode)", asMETHODPR(CKContext, SetFileWriteMode, (CK_FILE_WRITEMODE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CK_FILE_WRITEMODE GetFileWriteMode()", asMETHODPR(CKContext, GetFileWriteMode, (), CK_FILE_WRITEMODE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CK_TEXTURE_SAVEOPTIONS GetGlobalImagesSaveOptions()", asMETHODPR(CKContext, GetGlobalImagesSaveOptions, (), CK_TEXTURE_SAVEOPTIONS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asFUNCTIONPR([](CKContext *self, CK_TEXTURE_SAVEOPTIONS options) { if (RejectCKContextMutation("CKContext::SetGlobalImagesSaveOptions")) return; self->SetGlobalImagesSaveOptions(options); }, (CKContext *, CK_TEXTURE_SAVEOPTIONS), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asMETHODPR(CKContext, SetGlobalImagesSaveOptions, (CK_TEXTURE_SAVEOPTIONS), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKBitmapProperties@ GetGlobalImagesSaveFormat()", asMETHODPR(CKContext, GetGlobalImagesSaveFormat, (), CKBitmapProperties *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveFormat(CKBitmapProperties@ format)", asFUNCTIONPR([](CKContext *self, CKBitmapProperties *format) { if (RejectCKContextMutation("CKContext::SetGlobalImagesSaveFormat")) return; self->SetGlobalImagesSaveFormat(format); }, (CKContext *, CKBitmapProperties *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveFormat(CKBitmapProperties@ format)", asMETHODPR(CKContext, SetGlobalImagesSaveFormat, (CKBitmapProperties *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CK_SOUND_SAVEOPTIONS GetGlobalSoundsSaveOptions()", asMETHODPR(CKContext, GetGlobalSoundsSaveOptions, (), CK_SOUND_SAVEOPTIONS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalSoundsSaveOptions(CK_SOUND_SAVEOPTIONS options)", asFUNCTIONPR([](CKContext *self, CK_SOUND_SAVEOPTIONS options) { if (RejectCKContextMutation("CKContext::SetGlobalSoundsSaveOptions")) return; self->SetGlobalSoundsSaveOptions(options); }, (CKContext *, CK_SOUND_SAVEOPTIONS), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalSoundsSaveOptions(CK_SOUND_SAVEOPTIONS options)", asMETHODPR(CKContext, SetGlobalSoundsSaveOptions, (CK_SOUND_SAVEOPTIONS), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Save/Load functions
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKObjectArray *objects, CK_LOAD_FLAGS loadFlags) { return LoadCKContextFromFile(self, fileName, objects, loadFlags, nullptr); }, (CKContext *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -554,7 +488,7 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)", asFUNCTION(LoadCKContextFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "string GetLastFileLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastFileLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "string GetLastCmoLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastCmoLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void SetLastCmoLoaded(const string &in str)", asFUNCTIONPR([](CKContext *self, const std::string &str) { if (RejectCKContextMutation("CKContext::SetLastCmoLoaded")) return; self->SetLastCmoLoaded(const_cast<CKSTRING>(str.c_str())); }, (CKContext *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetLastCmoLoaded(const string &in str)", asFUNCTIONPR([](CKContext *self, const std::string &str) { self->SetLastCmoLoaded(const_cast<CKSTRING>(str.c_str())); }, (CKContext *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(const string &in fileName, CKFileInfo &out fileInfo)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKFileInfo *fileInfo) { return self->GetFileInfo(const_cast<CKSTRING>(fileName.c_str()), fileInfo); }, (CKContext *, const std::string &, CKFileInfo *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(int size, NativePointer buffer, CKFileInfo &out fileInfo)", asFUNCTION(GetCKContextFileInfoFromBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(NativeBuffer@ buffer, CKFileInfo &out fileInfo)", asFUNCTION(GetCKContextFileInfoFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -575,19 +509,19 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "bool IsRunTime()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsRunTime(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Render Engine Implementation Specific
-    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPreRender(CKRenderContext@ dev)", asFUNCTIONPR([](CKContext *self, CKRenderContext *renderContext) { if (RejectCKContextMutation("CKContext::ExecuteManagersOnPreRender")) return; self->ExecuteManagersOnPreRender(renderContext); }, (CKContext *, CKRenderContext *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPostRender(CKRenderContext@ dev)", asFUNCTIONPR([](CKContext *self, CKRenderContext *renderContext) { if (RejectCKContextMutation("CKContext::ExecuteManagersOnPostRender")) return; self->ExecuteManagersOnPostRender(renderContext); }, (CKContext *, CKRenderContext *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPostSpriteRender(CKRenderContext@ dev)", asFUNCTIONPR([](CKContext *self, CKRenderContext *renderContext) { if (RejectCKContextMutation("CKContext::ExecuteManagersOnPostSpriteRender")) return; self->ExecuteManagersOnPostSpriteRender(renderContext); }, (CKContext *, CKRenderContext *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPreRender(CKRenderContext@ dev)", asMETHODPR(CKContext, ExecuteManagersOnPreRender, (CKRenderContext*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPostRender(CKRenderContext@ dev)", asMETHODPR(CKContext, ExecuteManagersOnPostRender, (CKRenderContext*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void ExecuteManagersOnPostSpriteRender(CKRenderContext@ dev)", asMETHODPR(CKContext, ExecuteManagersOnPostSpriteRender, (CKRenderContext*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKContext", "void AddProfileTime(CK_PROFILE_CATEGORY category, float time)", asFUNCTIONPR([](CKContext *self, CK_PROFILE_CATEGORY category, float time) { if (RejectCKContextMutation("CKContext::AddProfileTime")) return; self->AddProfileTime(category, time); }, (CKContext *, CK_PROFILE_CATEGORY, float), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void AddProfileTime(CK_PROFILE_CATEGORY category, float time)", asMETHODPR(CKContext, AddProfileTime, (CK_PROFILE_CATEGORY, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Runtime Debug Mode
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR ProcessDebugStart(float deltaTime = 20.0)", asFUNCTIONPR([](CKContext *self, float deltaTime) -> CKERROR { if (RejectCKContextMutation("CKContext::ProcessDebugStart")) return CKERR_INVALIDOPERATION; return self->ProcessDebugStart(deltaTime); }, (CKContext *, float), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "bool ProcessDebugStep()", asFUNCTIONPR([](CKContext *self) -> bool { if (RejectCKContextMutation("CKContext::ProcessDebugStep")) return false; return self->ProcessDebugStep(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR ProcessDebugEnd()", asFUNCTIONPR([](CKContext *self) -> CKERROR { if (RejectCKContextMutation("CKContext::ProcessDebugEnd")) return CKERR_INVALIDOPERATION; return self->ProcessDebugEnd(); }, (CKContext *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR ProcessDebugStart(float deltaTime = 20.0)", asMETHODPR(CKContext, ProcessDebugStart, (float), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "bool ProcessDebugStep()", asFUNCTIONPR([](CKContext *self) -> bool { return self->ProcessDebugStep(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR ProcessDebugEnd()", asMETHODPR(CKContext, ProcessDebugEnd, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKDebugContext@ GetDebugContext()", asMETHODPR(CKContext, GetDebugContext, (), CKDebugContext *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKContext", "void SetVirtoolsVersion(CK_VIRTOOLS_VERSION ver, CKDWORD build)", asFUNCTIONPR([](CKContext *self, CK_VIRTOOLS_VERSION version, CKDWORD build) { if (RejectCKContextMutation("CKContext::SetVirtoolsVersion")) return; self->SetVirtoolsVersion(version, build); }, (CKContext *, CK_VIRTOOLS_VERSION, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "void SetVirtoolsVersion(CK_VIRTOOLS_VERSION ver, CKDWORD build)", asMETHODPR(CKContext, SetVirtoolsVersion, (CK_VIRTOOLS_VERSION, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetPVInformation()", asMETHODPR(CKContext, GetPVInformation, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsInDynamicCreationMode()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsInDynamicCreationMode(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }

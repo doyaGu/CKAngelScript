@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, host-call filtering, module imports, module bytecode, module replacement transactions, module graph diagnostics, and module fingerprints.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, module imports, module bytecode, module replacement transactions, module graph diagnostics, and module fingerprints.
 
 ## Optional Plugin Integration
 
@@ -90,7 +90,6 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`; recursive bytecode save/load from bytecode callbacks is also rejected. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
-| `CKAngelScriptSetHostCallFilter` | `callback` and `userData` are retained until replaced, cleared, or the CKAngelScript manager is destroyed. The callback must not execute script or unload/replace modules. |
 | `CKAngelScriptRegisterEngineExtension` | `Register` and `UserData` are retained until `CKAngelScriptUnregisterEngineExtension` succeeds or the CKAngelScript manager is destroyed. If immediate registration fails, they are not retained. |
 
 `CKAngelScriptFunctionExecutionOptions::BehaviorContext` is the exception: CKAngelScript copies it into the execution handle during `CreateFunctionExecution`, so the source pointer only needs to survive that call.
@@ -119,27 +118,6 @@ if (status != CKAS_OK) {
 ```
 
 Initializer helpers are null-safe no-ops. Status text helpers return static strings, never allocate, and do not update `CKAngelScriptGetLastResult()`.
-
-## Host-Call Filtering
-
-`CKAngelScriptSetHostCallFilter()` installs a manager-wide synchronous filter for CKAngelScript-provided host calls. It is intended for embedders that need phase gates, such as blocking world-mutating APIs while a script runtime is being hot-reloaded or preventing detached async work from escaping a synchronously owned callback.
-
-```cpp
-CKAS_STATUS FilterHostCall(const char *apiName, CKDWORD flags, void *userData) {
-    if ((flags & CKAS_HOSTCALL_MUTATES_HOST_STATE) != 0 && IsInRestrictedPhase(userData)) {
-        return CKAS_INVALIDSTATE;
-    }
-    return CKAS_OK;
-}
-
-CKAngelScriptResult result;
-CKAngelScriptInitResult(&result);
-CKAngelScriptSetHostCallFilter(angelScript, FilterHostCall, hostState, &result);
-```
-
-`CKAS_HOSTCALL_MUTATES_HOST_STATE` identifies calls that change Virtools or bridge state. CKAngelScript currently applies it to the high-level `Scene` mutations, `CKContext` mutations, the common mutating surface inherited from `CKObject`, parameter mutation/evaluation APIs, `CKBehavior` runtime execution, activation, and parameter writes, `CK3dEntity` hierarchy, transform, render, mesh, animation, skin, and bounding-state mutations, and `CKDataArray` structure, element, row, algorithm, file-write, and group-population mutations. `CKDataArray.GetElement`, `GetRow`, and `FindRow` also participate because they expose writable native storage or references. Parameter reads that request `update=true`, including the `CKBehavior.Get*ParameterValue` helpers, participate because Virtools may execute a `CKParameterOperation` while resolving the value; use `update=false` on a direct parameter read for a side-effect-free read in a restricted phase. `CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK` identifies every CKAngelScript async task-creation path, including delays, script tasks, aggregates, bridge waits, and message waits. Rejected calls on these participating surfaces raise a script exception before the operation changes host state or retains async work.
-
-The filter is not a sandbox. Specialized raw Virtools SDK bindings are covered only when their registration explicitly participates in the filter; extension authors must make the same choice for their own host calls. A non-`CKAS_OK` return rejects a participating call. The filter may call `CKAngelScriptSetActiveContextException()` to provide a phase-specific diagnostic; CKAngelScript preserves that exception and supplies its generic rejection text only when the filter did not provide one.
 
 ## Module Lifecycle
 
