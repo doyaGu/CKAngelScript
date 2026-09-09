@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 6
+#define CKAS_API_VERSION 7
 
 #ifdef __cplusplus
 class CKContext;
@@ -123,7 +123,8 @@ typedef enum CKAS_CALLFLAGS {
 
 typedef enum CKAS_HOSTCALLFLAGS {
     CKAS_HOSTCALL_DEFAULT = 0,
-    CKAS_HOSTCALL_MUTATES_HOST_STATE = 0x00000001
+    CKAS_HOSTCALL_MUTATES_HOST_STATE = 0x00000001,
+    CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK = 0x00000002
 } CKAS_HOSTCALLFLAGS;
 
 typedef enum CKAS_BYTECODEFLAGS {

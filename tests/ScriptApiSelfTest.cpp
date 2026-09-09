@@ -536,7 +536,10 @@ CKAS_STATUS HostCallFilterProbe(const char *apiName, CKDWORD flags, void *userDa
     ++data->CallCount;
     data->LastApiName = apiName;
     data->LastFlags = flags;
-    return (flags & CKAS_HOSTCALL_MUTATES_HOST_STATE) != 0 ? CKAS_INVALIDSTATE : CKAS_OK;
+    return (flags & (CKAS_HOSTCALL_MUTATES_HOST_STATE |
+                     CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) != 0
+               ? CKAS_INVALIDSTATE
+               : CKAS_OK;
 }
 
 CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
@@ -1387,6 +1390,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT != 0x00000002 ||
         CKAS_CALL_NO_SUSPEND != 0x00000001 ||
         CKAS_HOSTCALL_MUTATES_HOST_STATE != 0x00000001 ||
+        CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK != 0x00000002 ||
         CKAS_BYTECODE_DEFAULT != 0 ||
         CKAS_BYTECODE_STRIP_DEBUG_INFO != 0x00000001 ||
         CKAS_BYTECODE_REPLACEEXISTING != 0x00000002 ||
@@ -1449,6 +1453,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::Mutating") ||
         hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE) {
         error = "CKAngelScript API self-test expected mutating host calls to be rejected by the filter.";
+        return false;
+    }
+    if (!manager->RejectHostCall("SelfTest::Async", CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK) ||
+        hostCallFilterProbe.CallCount != 3 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::Async") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK) {
+        error = "CKAngelScript API self-test expected async scheduling calls to be rejected by the filter.";
         return false;
     }
     if (api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) != CKAS_OK ||
@@ -2600,7 +2611,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected truncated LoadModule options to fail.";
         return false;
     }
-
     constexpr const char *emptyCompileModuleName = "__CKAS_EmptyCompileSelfTest";
     CKAS_STATUS emptyStatus = api->CompileModule(emptyCompileModuleName,
                                                  "",
@@ -5144,6 +5154,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     constexpr const char *objectModuleName = "__CKAS_ManagerApiObjectSelfTest";
     const char *objectSource =
+        "void __ckas_public_object_async_worker() {}\n"
         "class __CKAS_PublicObject {\n"
         "  int base;\n"
         "  __CKAS_PublicObject() { base = 10; }\n"
@@ -5156,6 +5167,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
         "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
         "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
+        "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
         "}\n"
@@ -5753,6 +5765,47 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseMethod(waitMethod);
+
+    methodOptions.MethodDecl = "void SpawnDetached()";
+    CKAngelScriptMethod *spawnDetachedMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &spawnDetachedMethod, &result) != CKAS_OK ||
+        !spawnDetachedMethod) {
+        error = "CKAngelScript API self-test failed to find SpawnDetached object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the async host-call filter.";
+        api->ReleaseMethod(spawnDetachedMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = spawnDetachedMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedAsyncStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedAsyncError = result.ErrorMessage ? result.ErrorMessage : "";
+    const bool rejectedAsyncClean =
+        manager->GetAsyncScheduler() &&
+        !manager->GetAsyncScheduler()->HasTaskForModule(objectModuleName);
+    const bool asyncFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    api->ReleaseMethod(spawnDetachedMethod);
+    if (rejectedAsyncStatus != CKAS_EXECUTIONFAILED ||
+        rejectedAsyncError.find("Async work is not available") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "Async::Schedule") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK ||
+        !rejectedAsyncClean ||
+        !asyncFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered object calls to reject detached async work without retaining the module.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
 
     objectCall.Method = addMethod;
     objectCall.WriteArgs = WriteObjectInt;

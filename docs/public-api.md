@@ -122,7 +122,7 @@ Initializer helpers are null-safe no-ops. Status text helpers return static stri
 
 ## Host-Call Filtering
 
-`CKAngelScriptSetHostCallFilter()` installs a manager-wide synchronous filter for CKAngelScript-provided host calls. It is intended for embedders that need phase gates, such as blocking world-mutating APIs while a script runtime is being hot-reloaded.
+`CKAngelScriptSetHostCallFilter()` installs a manager-wide synchronous filter for CKAngelScript-provided host calls. It is intended for embedders that need phase gates, such as blocking world-mutating APIs while a script runtime is being hot-reloaded or preventing detached async work from escaping a synchronously owned callback.
 
 ```cpp
 CKAS_STATUS FilterHostCall(const char *apiName, CKDWORD flags, void *userData) {
@@ -136,6 +136,8 @@ CKAngelScriptResult result;
 CKAngelScriptInitResult(&result);
 CKAngelScriptSetHostCallFilter(angelScript, FilterHostCall, hostState, &result);
 ```
+
+`CKAS_HOSTCALL_MUTATES_HOST_STATE` identifies calls that change Virtools or bridge state. `CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK` identifies every CKAngelScript async task-creation path, including delays, script tasks, aggregates, bridge waits, and message waits. Rejecting async scheduling raises a script exception before a task is allocated or retained.
 
 The filter is not a sandbox and does not cover raw Virtools SDK bindings unless those bindings explicitly call into it. A non-`CKAS_OK` return rejects the host call; callers that need a script exception should set one with `CKAngelScriptSetActiveContextException()` from the active script thread.
 

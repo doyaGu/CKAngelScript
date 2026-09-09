@@ -1649,6 +1649,15 @@ ScriptAsyncOwnerId ScriptAsyncScheduler::CreateOwner() {
     return ownerId;
 }
 
+bool ScriptAsyncScheduler::RejectTaskCreation() const {
+    if (!ScriptManager::RejectActiveHostCall("Async::Schedule",
+                                             CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) {
+        return false;
+    }
+    SetScriptException("Async work is not available in the current script host phase.");
+    return true;
+}
+
 void ScriptAsyncScheduler::BeginOwnerExecution(asIScriptContext *context,
                                                ScriptAsyncOwnerId ownerId) {
     if (!context) {
@@ -1668,6 +1677,9 @@ void ScriptAsyncScheduler::EndOwnerExecution(asIScriptContext *context) {
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Delay, asTYPEID_VOID);
     task->NotifyGarbageCollector();
     task->SetDelayFrames(frames);
@@ -1676,6 +1688,9 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateManualTask(int subtypeId) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Manual, subtypeId);
     task->NotifyGarbageCollector();
     Track(task);
@@ -1683,6 +1698,9 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateManualTask(int subtypeId) {
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateScriptTask(asIScriptFunction *function, int subtypeId) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Script, subtypeId);
     task->NotifyGarbageCollector();
     task->SetFunction(function);
@@ -1693,6 +1711,9 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateScriptTask(asIScriptFunction *f
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateAggregate(ScriptAsyncTaskKind kind,
                                                            int subtypeId,
                                                            const std::vector<ScriptAsyncTaskBase *> &children) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), kind, subtypeId);
     task->NotifyGarbageCollector();
     task->SetChildren(children);
@@ -1701,6 +1722,9 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateAggregate(ScriptAsyncTaskKind k
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateBBTask(BBTask *taskHandle, const CKBehaviorContext *context, int inputIndex) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::BBTask, asTYPEID_VOID);
     task->NotifyGarbageCollector();
     task->SetBBTask(taskHandle, context, inputIndex);
@@ -1709,6 +1733,9 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateBBTask(BBTask *taskHandle, cons
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateGraphTask(GraphTask *taskHandle, const CKBehaviorContext *context) {
+    if (RejectTaskCreation()) {
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::GraphTask, asTYPEID_VOID);
     task->NotifyGarbageCollector();
     task->SetGraphTask(taskHandle, context);
@@ -1720,6 +1747,12 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateMessageWait(CKContext *context,
                                                              const std::string &message,
                                                              CKBeObject *object,
                                                              std::string *error) {
+    if (RejectTaskCreation()) {
+        if (error) {
+            *error = "Async work is not available in the current script host phase.";
+        }
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::MessageWait, asTYPEID_VOID);
     task->NotifyGarbageCollector();
     if (!task->SetMessageWait(context, message, object, error)) {
@@ -1734,6 +1767,12 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateMessageWait(CKContext *context,
                                                              CKMessageType messageType,
                                                              CKBeObject *object,
                                                              std::string *error) {
+    if (RejectTaskCreation()) {
+        if (error) {
+            *error = "Async work is not available in the current script host phase.";
+        }
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::MessageWait, asTYPEID_VOID);
     task->NotifyGarbageCollector();
     if (!task->SetMessageWait(context, messageType, object, error)) {
