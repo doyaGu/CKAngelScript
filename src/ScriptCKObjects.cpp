@@ -1676,6 +1676,15 @@ void RegisterCKSceneObject(asIScriptEngine *engine) {
 
 template <int IO>
 static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
+    constexpr const char *apiName = IO == 0
+                                        ? "CKBehavior::GetInputParameterValue(update=true)"
+                                    : IO == 1
+                                        ? "CKBehavior::GetOutputParameterValue(update=true)"
+                                        : "CKBehavior::GetLocalParameterValue(update=true)";
+    if (RejectCKObjectMutation(apiName)) {
+        gen->SetReturnDWord(CKERR_INVALIDOPERATION);
+        return;
+    }
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
     CKERROR err = ReadBehaviorParameterValue(self,
                                              static_cast<ScriptBehaviorParameterSlot>(IO),
@@ -1689,6 +1698,13 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
 
 template <int IO>
 static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
+    constexpr const char *apiName = IO == 1
+                                        ? "CKBehavior::SetOutputParameterValue"
+                                        : "CKBehavior::SetLocalParameterValue";
+    if (RejectCKObjectMutation(apiName)) {
+        gen->SetReturnDWord(CKERR_INVALIDOPERATION);
+        return;
+    }
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
     CKERROR err = WriteBehaviorParameterValue(self,
                                               static_cast<ScriptBehaviorParameterSlot>(IO),
@@ -1711,6 +1727,9 @@ static bool RejectCKBehaviorFunctionPointerWrite(const NativePointer &ptr, const
 }
 
 static void SetCKBehaviorFunction(CKBehavior *self, NativePointer fct) {
+    if (RejectCKObjectMutation("CKBehavior::SetFunction")) {
+        return;
+    }
     if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetFunction only accepts a null NativePointer from script.")) {
         return;
     }
@@ -1720,11 +1739,96 @@ static void SetCKBehaviorFunction(CKBehavior *self, NativePointer fct) {
 }
 
 static void SetCKBehaviorCallbackFunction(CKBehavior *self, NativePointer fct) {
+    if (RejectCKObjectMutation("CKBehavior::SetCallbackFunction")) {
+        return;
+    }
     if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetCallbackFunction only accepts a null NativePointer from script.")) {
         return;
     }
     if (self) {
         self->SetCallbackFunction(nullptr);
+    }
+}
+
+static int CallCKBehaviorCallback(CKBehavior *self, CKDWORD message) {
+    return RejectCKObjectMutation("CKBehavior::CallCallbackFunction")
+               ? 0
+               : self->CallCallbackFunction(message);
+}
+
+static int CallCKBehaviorSubCallbacks(CKBehavior *self, CKDWORD message, CKGUID *guid) {
+    return RejectCKObjectMutation("CKBehavior::CallSubBehaviorsCallbackFunction")
+               ? 0
+               : self->CallSubBehaviorsCallbackFunction(message, guid);
+}
+
+static int ExecuteCKBehavior(CKBehavior *self, float delta) {
+    return RejectCKObjectMutation("CKBehavior::Execute") ? 0 : self->Execute(delta);
+}
+
+static void SetCKBehaviorVersion(CKBehavior *self, CKDWORD version) {
+    if (!RejectCKObjectMutation("CKBehavior::SetVersion")) {
+        self->SetVersion(version);
+    }
+}
+
+static void ActivateCKBehaviorOutput(CKBehavior *self, int pos, bool active) {
+    if (!RejectCKObjectMutation("CKBehavior::ActivateOutput")) {
+        self->ActivateOutput(pos, active);
+    }
+}
+
+static void ActivateCKBehaviorInput(CKBehavior *self, int pos, bool active) {
+    if (!RejectCKObjectMutation("CKBehavior::ActivateInput")) {
+        self->ActivateInput(pos, active);
+    }
+}
+
+static void EnableCKBehaviorInputParameter(CKBehavior *self, int pos, bool enable) {
+    if (!RejectCKObjectMutation("CKBehavior::EnableInputParameter")) {
+        self->EnableInputParameter(pos, enable);
+    }
+}
+
+static NativePointer GetCKBehaviorOutputParameterWriteData(CKBehavior *self, int pos) {
+    return RejectCKObjectMutation("CKBehavior::GetOutputParameterWriteDataPtr")
+               ? NativePointer()
+               : NativePointer(self->GetOutputParameterWriteDataPtr(pos));
+}
+
+static CKERROR SetCKBehaviorOutputParameterObject(CKBehavior *self, int pos, CKObject *object) {
+    return RejectCKObjectMutation("CKBehavior::SetOutputParameterObject")
+               ? CKERR_INVALIDOPERATION
+               : self->SetOutputParameterObject(pos, object);
+}
+
+static void EnableCKBehaviorOutputParameter(CKBehavior *self, int pos, bool enable) {
+    if (!RejectCKObjectMutation("CKBehavior::EnableOutputParameter")) {
+        self->EnableOutputParameter(pos, enable);
+    }
+}
+
+static NativePointer GetCKBehaviorLocalParameterWriteData(CKBehavior *self, int pos) {
+    return RejectCKObjectMutation("CKBehavior::GetLocalParameterWriteDataPtr")
+               ? NativePointer()
+               : NativePointer(self->GetLocalParameterWriteDataPtr(pos));
+}
+
+static CKERROR SetCKBehaviorLocalParameterObject(CKBehavior *self, int pos, CKObject *object) {
+    return RejectCKObjectMutation("CKBehavior::SetLocalParameterObject")
+               ? CKERR_INVALIDOPERATION
+               : self->SetLocalParameterObject(pos, object);
+}
+
+static void ActivateCKBehavior(CKBehavior *self, bool active, bool reset) {
+    if (!RejectCKObjectMutation("CKBehavior::Activate")) {
+        self->Activate(active, reset);
+    }
+}
+
+static void SetCKBehaviorPriority(CKBehavior *self, int priority) {
+    if (!RejectCKObjectMutation("CKBehavior::SetPriority")) {
+        self->SetPriority(priority);
     }
 }
 
@@ -1767,12 +1871,12 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
 
     // Callbacks
     r = engine->RegisterObjectMethod("CKBehavior", "void SetCallbackFunction(NativePointer fct)", asFUNCTION(SetCKBehaviorCallbackFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "int CallCallbackFunction(CKDWORD message)", asMETHODPR(CKBehavior, CallCallbackFunction, (CKDWORD), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID &in behguid = void)", asMETHODPR(CKBehavior, CallSubBehaviorsCallbackFunction, (CKDWORD, CKGUID*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "int CallCallbackFunction(CKDWORD message)", asFUNCTION(CallCKBehaviorCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID &in behguid = void)", asFUNCTION(CallCKBehaviorSubCallbacks), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Execution
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsActive()", asFUNCTIONPR([](CKBehavior *self) -> bool { return self->IsActive(); }, (CKBehavior *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "int Execute(float delta)", asMETHODPR(CKBehavior, Execute, (float), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "int Execute(float delta)", asFUNCTION(ExecuteCKBehavior), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsParentScriptActiveInScene(CKScene@ scn)", asFUNCTIONPR([](CKBehavior *self, CKScene *scn) -> bool { return self->IsParentScriptActiveInScene(scn); }, (CKBehavior *, CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "int GetShortestDelay(CKBehavior@ beh)", asMETHODPR(CKBehavior, GetShortestDelay, (CKBehavior *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -1790,10 +1894,10 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorPrototype@ GetPrototype()", asMETHODPR(CKBehavior, GetPrototype, (), CKBehaviorPrototype *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "string GetPrototypeName()", asFUNCTIONPR([](CKBehavior *self) -> std::string { return ScriptStringify(self->GetPrototypeName()); }, (CKBehavior *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKDWORD GetVersion()", asMETHODPR(CKBehavior, GetVersion, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetVersion(CKDWORD version)", asMETHODPR(CKBehavior, SetVersion, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetVersion(CKDWORD version)", asFUNCTION(SetCKBehaviorVersion), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Outputs
-    r = engine->RegisterObjectMethod("CKBehavior", "void ActivateOutput(int pos, bool active = true)", asFUNCTIONPR([](CKBehavior *self, int pos, bool active) { self->ActivateOutput(pos, active); }, (CKBehavior *, int, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void ActivateOutput(int pos, bool active = true)", asFUNCTION(ActivateCKBehaviorOutput), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsOutputActive(int pos)", asFUNCTIONPR([](CKBehavior *self, int pos) -> bool { return self->IsOutputActive(pos); }, (CKBehavior *, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorIO@ RemoveOutput(int pos)", asMETHODPR(CKBehavior, RemoveOutput, (int), CKBehaviorIO *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR DeleteOutput(int pos)", asMETHODPR(CKBehavior, DeleteOutput, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1805,7 +1909,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorIO@ CreateOutput(const string &in name)", asFUNCTIONPR([](CKBehavior *self, const std::string &name) { return self->CreateOutput(const_cast<CKSTRING>(name.c_str())); }, (CKBehavior *, const std::string &), CKBehaviorIO *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Inputs
-    r = engine->RegisterObjectMethod("CKBehavior", "void ActivateInput(int pos, bool active = true)", asFUNCTIONPR([](CKBehavior *self, int pos, bool active) { self->ActivateInput(pos, active); }, (CKBehavior *, int, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void ActivateInput(int pos, bool active = true)", asFUNCTION(ActivateCKBehaviorInput), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsInputActive(int pos)", asFUNCTIONPR([](CKBehavior *self, int pos) -> bool { return self->IsInputActive(pos); }, (CKBehavior *, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorIO@ RemoveInput(int pos)", asMETHODPR(CKBehavior, RemoveInput, (int), CKBehaviorIO *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR DeleteInput(int pos)", asMETHODPR(CKBehavior, DeleteInput, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1832,7 +1936,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetInputParameterReadDataPtr(int pos)", asMETHODPR(CKBehavior, GetInputParameterReadDataPtr, (int), void *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKObject@ GetInputParameterObject(int pos)", asMETHODPR(CKBehavior, GetInputParameterObject, (int), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsInputParameterEnabled(int pos)", asFUNCTIONPR([](CKBehavior *self, int pos) -> bool { return self->IsInputParameterEnabled(pos); }, (CKBehavior *, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "void EnableInputParameter(int pos, bool enable)", asFUNCTIONPR([](CKBehavior *self, int pos, bool enable) { self->EnableInputParameter(pos, enable); }, (CKBehavior *, int, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void EnableInputParameter(int pos, bool enable)", asFUNCTION(EnableCKBehaviorInputParameter), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Outputs Parameters
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR ExportOutputParameter(CKParameterOut@ p)", asMETHODPR(CKBehavior, ExportOutputParameter, (CKParameterOut *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1849,11 +1953,11 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterValue(int pos, const NativePointer buf, int size = 0)", asMETHODPR(CKBehavior, SetOutputParameterValue, (int, const void *, int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetOutputParameterValue(int pos, ?&out value)", asFUNCTION(CKBehaviorGetParameterValueGeneric<1>), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterValue(int pos, ?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<1>), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetOutputParameterWriteDataPtr(int pos)", asMETHODPR(CKBehavior, GetOutputParameterWriteDataPtr, (int), void *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterObject(int pos, CKObject@ obj)", asMETHODPR(CKBehavior, SetOutputParameterObject, (int, CKObject*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetOutputParameterWriteDataPtr(int pos)", asFUNCTION(GetCKBehaviorOutputParameterWriteData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterObject(int pos, CKObject@ obj)", asFUNCTION(SetCKBehaviorOutputParameterObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKObject@ GetOutputParameterObject(int pos)", asMETHODPR(CKBehavior, GetOutputParameterObject, (int), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsOutputParameterEnabled(int pos)", asFUNCTIONPR([](CKBehavior *self, int pos) -> bool { return self->IsOutputParameterEnabled(pos); }, (CKBehavior *, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "void EnableOutputParameter(int pos, bool enable)", asFUNCTIONPR([](CKBehavior *self, int pos, bool enable) { self->EnableOutputParameter(pos, enable); }, (CKBehavior *, int, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void EnableOutputParameter(int pos, bool enable)", asFUNCTION(EnableCKBehaviorOutputParameter), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Local Parameters
     r = engine->RegisterObjectMethod("CKBehavior", "CKParameterLocal@ CreateLocalParameter(const string &in name, CKParameterType type)", asFUNCTIONPR([](CKBehavior *self, const std::string &name, CKParameterType type) { return self->CreateLocalParameter(const_cast<CKSTRING>(name.c_str()), type); }, (CKBehavior *, const std::string &, CKParameterType), CKParameterLocal *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -1867,14 +1971,14 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterValue(int pos, const NativePointer buf, int size = 0)", asMETHODPR(CKBehavior, SetLocalParameterValue, (int, const void *, int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetLocalParameterValue(int pos, ?&out value)", asFUNCTION(CKBehaviorGetParameterValueGeneric<2>), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterValue(int pos, ?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<2>), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetLocalParameterWriteDataPtr(int pos)", asMETHODPR(CKBehavior, GetLocalParameterWriteDataPtr, (int), void *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetLocalParameterWriteDataPtr(int pos)", asFUNCTION(GetCKBehaviorLocalParameterWriteData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetLocalParameterReadDataPtr(int pos)", asMETHODPR(CKBehavior, GetLocalParameterReadDataPtr, (int), void *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKObject@ GetLocalParameterObject(int pos)", asMETHODPR(CKBehavior, GetLocalParameterObject, (int), CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterObject(int pos, CKObject@ obj)", asMETHODPR(CKBehavior, SetLocalParameterObject, (int, CKObject *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterObject(int pos, CKObject@ obj)", asFUNCTION(SetCKBehaviorLocalParameterObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsLocalParameterSetting(int pos)", asFUNCTIONPR([](CKBehavior *self, int pos) -> bool { return self->IsLocalParameterSetting(pos); }, (CKBehavior *, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Run Time Graph: Activation
-    r = engine->RegisterObjectMethod("CKBehavior", "void Activate(bool active = true, bool breset = false)", asFUNCTIONPR([](CKBehavior *self, bool active, bool breset) { self->Activate(active, breset); }, (CKBehavior *, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void Activate(bool active = true, bool breset = false)", asFUNCTION(ActivateCKBehavior), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Run Time Graph: Sub Behaviors
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR AddSubBehavior(CKBehavior@ cbk)", asMETHODPR(CKBehavior, AddSubBehavior, (CKBehavior *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1899,7 +2003,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
 
     // Run Time Graph: Behavior Priority
     r = engine->RegisterObjectMethod("CKBehavior", "int GetPriority()", asMETHODPR(CKBehavior, GetPriority, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetPriority(int priority)", asMETHODPR(CKBehavior, SetPriority, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetPriority(int priority)", asFUNCTION(SetCKBehaviorPriority), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Profiling
     r = engine->RegisterObjectMethod("CKBehavior", "float GetLastExecutionTime()", asMETHODPR(CKBehavior, GetLastExecutionTime, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

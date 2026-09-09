@@ -5170,6 +5170,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  void CreateNativeObject() { GetCKContext(0).CreateObject(CKCID_OBJECT, \"__CKAS_HostMutationProbe\"); }\n"
         "  void RenameNativeObject() { GetCKContext(0).GetObjectByName(\"__CKAS_ObjectMutationProbe\").SetName(\"__CKAS_ObjectMutationRejected\"); }\n"
         "  void SetNativeParameter() { CKParameter@ p = cast<CKParameter@>(GetCKContext(0).GetObjectByName(\"__CKAS_ParameterMutationProbe\")); p.SetStringValue(\"after\"); }\n"
+        "  void ActivateNativeBehavior() { CKBehavior@ b = cast<CKBehavior@>(GetCKContext(0).GetObjectByName(\"__CKAS_BehaviorMutationProbe\")); b.Activate(true, false); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -5933,6 +5934,62 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         std::strcmp(parameterValueAfterRejection, "before") != 0 ||
         !parameterMutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CKParameter mutation to preserve the value.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void ActivateNativeBehavior()";
+    CKAngelScriptMethod *activateNativeBehaviorMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &activateNativeBehaviorMethod, &result) != CKAS_OK ||
+        !activateNativeBehaviorMethod) {
+        error = "CKAngelScript API self-test failed to find ActivateNativeBehavior object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *behaviorMutationProbeName = "__CKAS_BehaviorMutationProbe";
+    CKBehavior *behaviorMutationProbe =
+        static_cast<CKBehavior *>(context->CreateObject(CKCID_BEHAVIOR,
+                                                        const_cast<CKSTRING>(behaviorMutationProbeName),
+                                                        CK_OBJECTCREATION_DYNAMIC));
+    if (!behaviorMutationProbe || behaviorMutationProbe->IsActive()) {
+        error = "CKAngelScript API self-test could not initialize the CKBehavior mutation probe.";
+        if (behaviorMutationProbe) {
+            context->DestroyObject(behaviorMutationProbe);
+        }
+        api->ReleaseMethod(activateNativeBehaviorMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CKBehavior mutation filter.";
+        context->DestroyObject(behaviorMutationProbe);
+        api->ReleaseMethod(activateNativeBehaviorMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = activateNativeBehaviorMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedBehaviorStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedBehaviorError = result.ErrorMessage ? result.ErrorMessage : "";
+    const bool behaviorStillInactive = !behaviorMutationProbe->IsActive();
+    const bool behaviorMutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(behaviorMutationProbe);
+    api->ReleaseMethod(activateNativeBehaviorMethod);
+    if (rejectedBehaviorStatus != CKAS_EXECUTIONFAILED ||
+        rejectedBehaviorError.find("CKBehavior::Activate is not available") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKBehavior::Activate") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        !behaviorStillInactive ||
+        !behaviorMutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKBehavior activation to preserve runtime state.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;
