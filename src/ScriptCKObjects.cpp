@@ -495,6 +495,11 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(0);
     void *buf = gen->GetArgAddress(0);
 
+    if (RejectCKObjectMutation("CKParameterIn::GetValue(update=true)")) {
+        gen->SetReturnDWord(CKERR_INVALIDOPERATION);
+        return;
+    }
+
     if (!self || !buf) {
         if (ctx)
             ctx->SetException("CKParameterIn.GetValue requires a valid output reference");
@@ -513,6 +518,9 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 
 template <typename T>
 static NativeBuffer *GetCKParameterInReadData(T *self) {
+    if (RejectCKObjectMutation("CKParameterIn::GetReadData(update=true)")) {
+        return NativeBuffer::Create(0);
+    }
     if (!self) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
             ctx->SetException("CKParameterIn.GetReadData requires a valid input parameter.");
@@ -537,6 +545,9 @@ static CKERROR SetCKParameterInDirectSource(T *self, CKParameter *param) {
             ctx->SetException("CKParameterIn.SetDirectSource requires a valid input parameter.");
         return CKERR_INVALIDPARAMETER;
     }
+    if (RejectCKObjectMutation("CKParameterIn::SetDirectSource")) {
+        return CKERR_INVALIDOPERATION;
+    }
     return self->SetDirectSource(param);
 }
 
@@ -546,6 +557,9 @@ static CKERROR ShareCKParameterInSourceWith(T *self, CKParameterIn *pin) {
         if (asIScriptContext *ctx = asGetActiveContext())
             ctx->SetException("CKParameterIn.ShareSourceWith requires a non-null input parameter.");
         return CKERR_INVALIDPARAMETER;
+    }
+    if (RejectCKObjectMutation("CKParameterIn::ShareSourceWith")) {
+        return CKERR_INVALIDOPERATION;
     }
     return self->ShareSourceWith(pin);
 }
@@ -562,6 +576,9 @@ static void SetCKParameterInOwner(T *self, CKObject *owner) {
             ctx->SetException("CKParameterIn.SetOwner only accepts CKBehavior or CKParameterOperation owners.");
         return;
     }
+    if (RejectCKObjectMutation("CKParameterIn::SetOwner")) {
+        return;
+    }
     self->SetOwner(owner);
 }
 
@@ -569,12 +586,16 @@ template <typename T>
 static void SetCKParameterInType(T *self, CKParameterType type, bool updateSource) {
     if (!self)
         return;
+    if (RejectCKObjectMutation("CKParameterIn::SetType"))
+        return;
     self->SetType(type, updateSource, nullptr);
 }
 
 template <typename T>
 static void SetCKParameterInTypeNamed(T *self, CKParameterType type, bool updateSource, const std::string &newName) {
     if (!self)
+        return;
+    if (RejectCKObjectMutation("CKParameterIn::SetType"))
         return;
     std::vector<char> buffer(newName.begin(), newName.end());
     buffer.push_back('\0');
@@ -585,12 +606,16 @@ template <typename T>
 static void SetCKParameterInGuid(T *self, CKGUID guid, bool updateSource) {
     if (!self)
         return;
+    if (RejectCKObjectMutation("CKParameterIn::SetGUID"))
+        return;
     self->SetGUID(guid, updateSource, nullptr);
 }
 
 template <typename T>
 static void SetCKParameterInGuidNamed(T *self, CKGUID guid, bool updateSource, const std::string &newName) {
     if (!self)
+        return;
+    if (RejectCKObjectMutation("CKParameterIn::SetGUID"))
         return;
     std::vector<char> buffer(newName.begin(), newName.end());
     buffer.push_back('\0');
@@ -665,12 +690,15 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
     void *buf = gen->GetArgAddress(0);
     bool update = gen->GetArgByte(1);
 
-    CKERROR err = CK_OK;
-
     if (!buf) {
         if (ctx)
             ctx->SetException("CKParameter.GetValue requires a valid output reference");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
+
+    if (update && RejectCKObjectMutation("CKParameter::GetValue(update=true)")) {
+        gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
 
@@ -692,11 +720,20 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
+    if (RejectCKObjectMutation("CKParameter::SetValue")) {
+        gen->SetReturnDWord(CKERR_INVALIDOPERATION);
+        return;
+    }
+
     gen->SetReturnDWord(WriteParameterGenericValue(self, typeId, buf, engine, ctx));
 }
 
 template <typename T>
 static int GetCKParameterStringValue(T *self, std::string &value, bool update) {
+    if (update && RejectCKObjectMutation("CKParameter::GetStringValue(update=true)")) {
+        value.clear();
+        return CKERR_INVALIDOPERATION;
+    }
     return ReadCKParameterStringValue(self, value, update);
 }
 
@@ -707,6 +744,10 @@ static CKERROR SetCKParameterStringValue(T *self, const std::string &value) {
             ctx->SetException("CKParameter.SetStringValue requires a valid parameter.");
         }
         return CKERR_INVALIDPARAMETER;
+    }
+
+    if (RejectCKObjectMutation("CKParameter::SetStringValue")) {
+        return CKERR_INVALIDOPERATION;
     }
 
     std::vector<char> buffer(value.begin(), value.end());
@@ -721,6 +762,9 @@ static CKERROR CopyCKParameterValue(T *self, CKParameter *param, bool updatePara
             ctx->SetException("CKParameter.CopyValue requires a valid source parameter.");
         }
         return CKERR_INVALIDPARAMETER;
+    }
+    if (RejectCKObjectMutation("CKParameter::CopyValue")) {
+        return CKERR_INVALIDOPERATION;
     }
     return self->CopyValue(param, updateParam);
 }
@@ -738,6 +782,9 @@ static bool IsCKParameterCompatibleWith(T *self, CKParameter *param) {
 
 template <typename T>
 static NativeBuffer *GetCKParameterReadData(T *self, bool update) {
+    if (update && RejectCKObjectMutation("CKParameter::GetReadData(update=true)")) {
+        return NativeBuffer::Create(0);
+    }
     if (!self) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
             ctx->SetException("CKParameter.GetReadData requires a valid parameter.");
@@ -777,12 +824,48 @@ static CKParameterTypeDesc &GetCKParameterTypeDesc(T *self) {
 }
 
 template <typename T>
+static CKObject *GetCKParameterValueObject(T *self, bool update) {
+    if (update && RejectCKObjectMutation("CKParameter::GetValueObject(update=true)")) {
+        return nullptr;
+    }
+    return self->GetValueObject(update);
+}
+
+template <typename T>
+static void SetCKParameterType(T *self, CKParameterType type) {
+    if (!RejectCKObjectMutation("CKParameter::SetType")) {
+        self->SetType(type);
+    }
+}
+
+template <typename T>
+static void SetCKParameterGuid(T *self, CKGUID guid) {
+    if (!RejectCKObjectMutation("CKParameter::SetGUID")) {
+        self->SetGUID(guid);
+    }
+}
+
+template <typename T>
+static void SetCKParameterOwner(T *self, CKObject *owner) {
+    if (!RejectCKObjectMutation("CKParameter::SetOwner")) {
+        self->SetOwner(owner);
+    }
+}
+
+template <typename T>
+static void EnableCKParameter(T *self, bool active) {
+    if (!RejectCKObjectMutation("CKParameter::Enable")) {
+        self->Enable(active);
+    }
+}
+
+template <typename T>
 static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
     RegisterCKObjectMembers<T>(engine, name);
 
-    r = engine->RegisterObjectMethod(name, "CKObject@ GetValueObject(bool update = true)", asFUNCTIONPR([](T *self, bool update) { return self->GetValueObject(update); }, (T *, bool), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKObject@ GetValueObject(bool update = true)", asFUNCTIONPR(GetCKParameterValueObject<T>, (T *, bool), CKObject *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod(name, "CKERROR GetValue(NativePointer buf, bool update = true)", asFUNCTIONPR([](T *self, NativePointer buf, bool update) { return self->GetValue(buf.Get(), update); }, (T *, NativePointer, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod(name, "CKERROR SetValue(NativePointer buf, int size = 0)", asFUNCTIONPR([](T *self, NativePointer buf, int size) { return self->SetValue(buf.Get(), size); }, (T *, NativePointer, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -800,15 +883,15 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
     r = engine->RegisterObjectMethod(name, "int GetStringValue(string &out value, bool update = true)", asFUNCTION(GetCKParameterStringValue<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKParameterType GetType()", asMETHODPR(T, GetType, (), CKParameterType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type)", asMETHODPR(T, SetType, (CKParameterType), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type)", asFUNCTIONPR(SetCKParameterType<T>, (T *, CKParameterType), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKGUID GetGUID()", asMETHODPR(T, GetGUID, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid)", asMETHODPR(T, SetGUID, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid)", asFUNCTIONPR(SetCKParameterGuid<T>, (T *, CKGUID), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK_CLASSID GetParameterClassID()", asMETHODPR(T, GetParameterClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetOwner(CKObject@ obj)", asMETHODPR(T, SetOwner, (CKObject*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOwner(CKObject@ obj)", asFUNCTIONPR(SetCKParameterOwner<T>, (T *, CKObject *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObject@ GetOwner()", asMETHODPR(T, GetOwner, (), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void Enable(bool act = true)", asFUNCTIONPR([](T *self, bool act) { self->Enable(act); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Enable(bool act = true)", asFUNCTIONPR(EnableCKParameter<T>, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsEnabled()", asFUNCTIONPR([](T *self) -> bool { return self->IsEnabled(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod(name, "CKERROR CreateDefaultValue()", asMETHODPR(T, CreateDefaultValue, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -834,6 +917,9 @@ static CKERROR AddCKParameterOutDestination(T *self, CKParameter *param, bool ch
             ctx->SetException("CKParameterOut.AddDestination requires a non-null parameter.");
         return CKERR_INVALIDPARAMETER;
     }
+    if (RejectCKObjectMutation("CKParameterOut::AddDestination")) {
+        return CKERR_INVALIDOPERATION;
+    }
     return self->AddDestination(param, checkType);
 }
 
@@ -844,7 +930,24 @@ static void RemoveCKParameterOutDestination(T *self, CKParameter *param) {
             ctx->SetException("CKParameterOut.RemoveDestination requires a non-null parameter.");
         return;
     }
+    if (RejectCKObjectMutation("CKParameterOut::RemoveDestination")) {
+        return;
+    }
     self->RemoveDestination(param);
+}
+
+template <typename T>
+static void NotifyCKParameterOutDataChanged(T *self) {
+    if (!RejectCKObjectMutation("CKParameterOut::DataChanged")) {
+        self->DataChanged();
+    }
+}
+
+template <typename T>
+static void RemoveAllCKParameterOutDestinations(T *self) {
+    if (!RejectCKObjectMutation("CKParameterOut::RemoveAllDestinations")) {
+        self->RemoveAllDestinations();
+    }
 }
 
 template <typename T>
@@ -863,12 +966,12 @@ static void RegisterCKParameterOutMembers(asIScriptEngine *engine, const char *n
 
     RegisterCKParameterMembers<T>(engine, name);
 
-    r = engine->RegisterObjectMethod(name, "void DataChanged()", asMETHODPR(T, DataChanged, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void DataChanged()", asFUNCTIONPR(NotifyCKParameterOutDataChanged<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR AddDestination(CKParameter@ param, bool checkType = true)", asFUNCTIONPR(AddCKParameterOutDestination<T>, (T *, CKParameter *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void RemoveDestination(CKParameter@ param)", asFUNCTIONPR(RemoveCKParameterOutDestination<T>, (T *, CKParameter *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetDestinationCount()", asMETHODPR(T, GetDestinationCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetDestination(int pos)", asFUNCTIONPR(GetCKParameterOutDestination<T>, (T *, int), CKParameter *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void RemoveAllDestinations()", asMETHODPR(T, RemoveAllDestinations, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void RemoveAllDestinations()", asFUNCTIONPR(RemoveAllCKParameterOutDestinations<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod(name, "void Update()", asMETHODPR(T, Update, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -889,7 +992,7 @@ static void RegisterCKParameterLocalMembers(asIScriptEngine *engine, const char 
 
     RegisterCKParameterMembers<T>(engine, name);
 
-    r = engine->RegisterObjectMethod(name, "void SetAsMyselfParameter(bool act)", asFUNCTIONPR([](T *self, bool act) { self->SetAsMyselfParameter(act); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetAsMyselfParameter(bool act)", asFUNCTIONPR([](T *self, bool active) { if (RejectCKObjectMutation("CKParameterLocal::SetAsMyselfParameter")) return; self->SetAsMyselfParameter(active); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsMyselfParameter()", asFUNCTIONPR([](T *self) -> bool { return self->IsMyselfParameter(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKParameterLocal") != 0) {
@@ -910,12 +1013,39 @@ static void SetCKParameterOperationOwner(T *self, CKBehavior *owner) {
             ctx->SetException("CKParameterOperation.SetOwner requires a non-null behavior owner.");
         return;
     }
+    if (RejectCKObjectMutation("CKParameterOperation::SetOwner")) {
+        return;
+    }
     self->SetOwner(owner);
 }
 
 template <typename T>
 static bool HasCKParameterOperationFunction(T *self) {
     return self && self->GetOperationFunction() != nullptr;
+}
+
+template <typename T>
+static CKERROR ExecuteCKParameterOperation(T *self) {
+    return RejectCKObjectMutation("CKParameterOperation::DoOperation")
+               ? CKERR_INVALIDOPERATION
+               : self->DoOperation();
+}
+
+template <typename T>
+static void ReconstructCKParameterOperation(T *self,
+                                            const std::string &name,
+                                            CKGUID operationGuid,
+                                            CKGUID resultGuid,
+                                            CKGUID firstGuid,
+                                            CKGUID secondGuid) {
+    if (RejectCKObjectMutation("CKParameterOperation::Reconstruct")) {
+        return;
+    }
+    self->Reconstruct(const_cast<CKSTRING>(name.c_str()),
+                      operationGuid,
+                      resultGuid,
+                      firstGuid,
+                      secondGuid);
 }
 
 template <typename T>
@@ -931,10 +1061,10 @@ static void RegisterCKParameterOperationMembers(asIScriptEngine *engine, const c
     r = engine->RegisterObjectMethod(name, "CKBehavior@ GetOwner()", asMETHODPR(T, GetOwner, (), CKBehavior *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetOwner(CKBehavior@)", asFUNCTIONPR(SetCKParameterOperationOwner<T>, (T *, CKBehavior *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "CKERROR DoOperation()", asMETHODPR(T, DoOperation, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR DoOperation()", asFUNCTIONPR(ExecuteCKParameterOperation<T>, (T *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKGUID GetOperationGuid()", asMETHODPR(T, GetOperationGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void Reconstruct(const string &in name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid)", asFUNCTIONPR([](T *self, const std::string &name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid) { self->Reconstruct(const_cast<CKSTRING>(name.c_str()), opGuid, resGuid, p1Guid, p2Guid); }, (T *, const std::string&, CKGUID, CKGUID, CKGUID, CKGUID), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Reconstruct(const string &in name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid)", asFUNCTIONPR(ReconstructCKParameterOperation<T>, (T *, const std::string &, CKGUID, CKGUID, CKGUID, CKGUID), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool HasOperationFunction()", asFUNCTIONPR(HasCKParameterOperationFunction<T>, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 

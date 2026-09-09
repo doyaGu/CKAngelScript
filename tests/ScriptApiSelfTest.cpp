@@ -5169,6 +5169,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
         "  void CreateNativeObject() { GetCKContext(0).CreateObject(CKCID_OBJECT, \"__CKAS_HostMutationProbe\"); }\n"
         "  void RenameNativeObject() { GetCKContext(0).GetObjectByName(\"__CKAS_ObjectMutationProbe\").SetName(\"__CKAS_ObjectMutationRejected\"); }\n"
+        "  void SetNativeParameter() { CKParameter@ p = cast<CKParameter@>(GetCKContext(0).GetObjectByName(\"__CKAS_ParameterMutationProbe\")); p.SetStringValue(\"after\"); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -5874,6 +5875,64 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !objectNameUnchanged ||
         !objectMutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CKObject mutation to fail before changing host state.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void SetNativeParameter()";
+    CKAngelScriptMethod *setNativeParameterMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &setNativeParameterMethod, &result) != CKAS_OK ||
+        !setNativeParameterMethod) {
+        error = "CKAngelScript API self-test failed to find SetNativeParameter object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *parameterMutationProbeName = "__CKAS_ParameterMutationProbe";
+    CKParameterLocal *parameterMutationProbe =
+        context->CreateCKParameterLocal(const_cast<CKSTRING>(parameterMutationProbeName),
+                                        CKPGUID_STRING,
+                                        TRUE);
+    if (!parameterMutationProbe ||
+        parameterMutationProbe->SetStringValue(const_cast<CKSTRING>("before")) != CK_OK) {
+        error = "CKAngelScript API self-test could not initialize the CKParameter mutation probe.";
+        if (parameterMutationProbe) {
+            context->DestroyObject(parameterMutationProbe);
+        }
+        api->ReleaseMethod(setNativeParameterMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CKParameter mutation filter.";
+        context->DestroyObject(parameterMutationProbe);
+        api->ReleaseMethod(setNativeParameterMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = setNativeParameterMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedParameterStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedParameterError = result.ErrorMessage ? result.ErrorMessage : "";
+    char parameterValueAfterRejection[32] = {};
+    parameterMutationProbe->GetStringValue(parameterValueAfterRejection, FALSE);
+    const bool parameterMutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(parameterMutationProbe);
+    api->ReleaseMethod(setNativeParameterMethod);
+    if (rejectedParameterStatus != CKAS_EXECUTIONFAILED ||
+        rejectedParameterError.find("CKParameter::SetStringValue is not available") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKParameter::SetStringValue") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        std::strcmp(parameterValueAfterRejection, "before") != 0 ||
+        !parameterMutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKParameter mutation to preserve the value.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;
