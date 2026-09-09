@@ -248,47 +248,59 @@ private:
     Function m_Function;
 };
 
+// AngelScript can call a method on an auxiliary C++ object while passing the
+// script object as the first argument. These bindings use that facility to
+// apply one host-mutation policy without adding a named wrapper for every CK
+// method. The auxiliary objects must remain alive for the engine lifetime.
 constexpr asPWORD kGuardedMutationBindingsType = 3002;
 
 class GuardedMutationBindings {
 public:
-    std::vector<std::unique_ptr<GuardedMutationBinding>> Entries;
+    template <typename Binding>
+    int Register(asIScriptEngine *engine,
+                 const char *objectType,
+                 const char *declaration,
+                 std::unique_ptr<Binding> binding) {
+        Binding *auxiliary = binding.get();
+        auto invoke = &Binding::Invoke;
+
+        // Transfer ownership before AngelScript stores the auxiliary pointer.
+        // A failed registration is rolled back immediately.
+        m_Entries.emplace_back(std::move(binding));
+        const int result = engine->RegisterObjectMethod(
+            objectType,
+            declaration,
+            asSMethodPtr<sizeof(invoke)>::Convert(invoke),
+            asCALL_THISCALL_OBJFIRST,
+            auxiliary);
+        if (result < 0) {
+            m_Entries.pop_back();
+        }
+        return result;
+    }
+
+    static void Cleanup(asIScriptEngine *engine) {
+        delete static_cast<GuardedMutationBindings *>(
+            engine->SetUserData(nullptr, kGuardedMutationBindingsType));
+    }
+
+private:
+    std::vector<std::unique_ptr<GuardedMutationBinding>> m_Entries;
 };
 
-static GuardedMutationBindings *GetGuardedMutationBindings(asIScriptEngine *engine) {
+static GuardedMutationBindings &GetGuardedMutationBindings(asIScriptEngine *engine) {
     auto *bindings = static_cast<GuardedMutationBindings *>(
         engine->GetUserData(kGuardedMutationBindingsType));
     if (bindings) {
-        return bindings;
+        return *bindings;
     }
 
     bindings = new GuardedMutationBindings();
     engine->SetUserData(bindings, kGuardedMutationBindingsType);
-    engine->SetEngineUserDataCleanupCallback([](asIScriptEngine *owner) {
-        auto *ownedBindings = static_cast<GuardedMutationBindings *>(
-            owner->SetUserData(nullptr, kGuardedMutationBindingsType));
-        delete ownedBindings;
-    }, kGuardedMutationBindingsType);
-    return bindings;
-}
-
-template <typename Binding>
-static int RegisterGuardedMutationBinding(asIScriptEngine *engine,
-                                          const char *objectType,
-                                          const char *declaration,
-                                          std::unique_ptr<Binding> binding) {
-    Binding *auxiliary = binding.get();
-    auto invoke = &Binding::Invoke;
-    const int result = engine->RegisterObjectMethod(
-        objectType,
-        declaration,
-        asSMethodPtr<sizeof(invoke)>::Convert(invoke),
-        asCALL_THISCALL_OBJFIRST,
-        auxiliary);
-    if (result >= 0) {
-        GetGuardedMutationBindings(engine)->Entries.emplace_back(std::move(binding));
-    }
-    return result;
+    engine->SetEngineUserDataCleanupCallback(
+        &GuardedMutationBindings::Cleanup,
+        kGuardedMutationBindingsType);
+    return *bindings;
 }
 
 template <typename Object, typename Return, typename... Args>
@@ -300,7 +312,7 @@ static int RegisterGuardedMutationMethod(
     typename GuardedMutationMethod<Object, Return, Args...>::Function function,
     Return rejectedValue) {
     using Binding = GuardedMutationMethod<Object, Return, Args...>;
-    return RegisterGuardedMutationBinding(
+    return GetGuardedMutationBindings(engine).Register(
         engine,
         objectType,
         declaration,
@@ -316,7 +328,7 @@ static int RegisterGuardedMutationMethod(
     typename GuardedMutationMethod<Object, Return, Args...>::Function function,
     typename GuardedMutationMethod<Object, Return, Args...>::Rejection rejection) {
     using Binding = GuardedMutationMethod<Object, Return, Args...>;
-    return RegisterGuardedMutationBinding(
+    return GetGuardedMutationBindings(engine).Register(
         engine,
         objectType,
         declaration,
@@ -331,7 +343,7 @@ static int RegisterGuardedVoidMutationMethod(
     const char *apiName,
     typename GuardedMutationMethod<Object, void, Args...>::Function function) {
     using Binding = GuardedMutationMethod<Object, void, Args...>;
-    return RegisterGuardedMutationBinding(
+    return GetGuardedMutationBindings(engine).Register(
         engine,
         objectType,
         declaration,
