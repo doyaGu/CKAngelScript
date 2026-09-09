@@ -2,7 +2,6 @@
 
 #include <limits.h>
 #include <stdint.h>
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -198,156 +197,113 @@ static bool AllowCKObjectMutation(const char *method) {
     return !ScriptManager::RejectActiveHostMutation(method);
 }
 
-class GuardedMutationBinding {
+template <typename Object, typename Return, typename Function, typename... Args>
+class GuardedMutationThunk {
 public:
-    virtual ~GuardedMutationBinding() = default;
-};
+    static void Configure(const char *apiName, Return rejectedValue) {
+        s_ApiName = apiName;
+        s_RejectedValue = rejectedValue;
+    }
 
-template <typename Object, typename Return, typename... Args>
-class GuardedMutationMethod final : public GuardedMutationBinding {
-public:
-    using Function = Return (*)(Object *, Args...);
-    using Rejection = Return (*)(Object *);
-
-    GuardedMutationMethod(const char *apiName, Function function, Return rejectedValue)
-        : m_ApiName(apiName), m_Function(function), m_RejectedValue(rejectedValue) {}
-
-    GuardedMutationMethod(const char *apiName, Function function, Rejection rejection)
-        : m_ApiName(apiName), m_Function(function), m_Rejection(rejection) {}
-
-    Return Invoke(Object *self, Args... args) {
-        if (!AllowCKObjectMutation(m_ApiName)) {
-            return m_Rejection ? m_Rejection(self) : m_RejectedValue;
+    static Return Invoke(Object *self, Args... args) {
+        if (!AllowCKObjectMutation(s_ApiName)) {
+            return s_RejectedValue;
         }
-        return m_Function(self, args...);
+        return Function{}(self, args...);
     }
 
 private:
-    const char *m_ApiName;
-    Function m_Function;
-    Return m_RejectedValue{};
-    Rejection m_Rejection = nullptr;
+    inline static const char *s_ApiName = nullptr;
+    inline static Return s_RejectedValue{};
 };
 
-template <typename Object, typename... Args>
-class GuardedMutationMethod<Object, void, Args...> final : public GuardedMutationBinding {
+template <typename Object, typename Return, typename Function, typename Rejection, typename... Args>
+class GuardedMutationThunkWithRejection {
 public:
-    using Function = void (*)(Object *, Args...);
+    static void Configure(const char *apiName) {
+        s_ApiName = apiName;
+    }
 
-    GuardedMutationMethod(const char *apiName, Function function)
-        : m_ApiName(apiName), m_Function(function) {}
+    static Return Invoke(Object *self, Args... args) {
+        if (!AllowCKObjectMutation(s_ApiName)) {
+            return Rejection{}(self);
+        }
+        return Function{}(self, args...);
+    }
 
-    void Invoke(Object *self, Args... args) {
-        if (AllowCKObjectMutation(m_ApiName)) {
-            m_Function(self, args...);
+private:
+    inline static const char *s_ApiName = nullptr;
+};
+
+template <typename Object, typename Function, typename... Args>
+class GuardedVoidMutationThunk {
+public:
+    static void Configure(const char *apiName) {
+        s_ApiName = apiName;
+    }
+
+    static void Invoke(Object *self, Args... args) {
+        if (AllowCKObjectMutation(s_ApiName)) {
+            Function{}(self, args...);
         }
     }
 
 private:
-    const char *m_ApiName;
-    Function m_Function;
+    inline static const char *s_ApiName = nullptr;
 };
 
-// AngelScript can call a method on an auxiliary C++ object while passing the
-// script object as the first argument. These bindings use that facility to
-// apply one host-mutation policy without adding a named wrapper for every CK
-// method. The auxiliary objects must remain alive for the engine lifetime.
-constexpr asPWORD kGuardedMutationBindingsType = 3002;
-
-class GuardedMutationBindings {
-public:
-    template <typename Binding>
-    int Register(asIScriptEngine *engine,
-                 const char *objectType,
-                 const char *declaration,
-                 std::unique_ptr<Binding> binding) {
-        Binding *auxiliary = binding.get();
-        auto invoke = &Binding::Invoke;
-
-        // Transfer ownership before AngelScript stores the auxiliary pointer.
-        // A failed registration is rolled back immediately.
-        m_Entries.emplace_back(std::move(binding));
-        const int result = engine->RegisterObjectMethod(
-            objectType,
-            declaration,
-            asSMethodPtr<sizeof(invoke)>::Convert(invoke),
-            asCALL_THISCALL_OBJFIRST,
-            auxiliary);
-        if (result < 0) {
-            m_Entries.pop_back();
-        }
-        return result;
-    }
-
-    static void Cleanup(asIScriptEngine *engine) {
-        delete static_cast<GuardedMutationBindings *>(
-            engine->SetUserData(nullptr, kGuardedMutationBindingsType));
-    }
-
-private:
-    std::vector<std::unique_ptr<GuardedMutationBinding>> m_Entries;
-};
-
-static GuardedMutationBindings &GetGuardedMutationBindings(asIScriptEngine *engine) {
-    auto *bindings = static_cast<GuardedMutationBindings *>(
-        engine->GetUserData(kGuardedMutationBindingsType));
-    if (bindings) {
-        return *bindings;
-    }
-
-    bindings = new GuardedMutationBindings();
-    engine->SetUserData(bindings, kGuardedMutationBindingsType);
-    engine->SetEngineUserDataCleanupCallback(
-        &GuardedMutationBindings::Cleanup,
-        kGuardedMutationBindingsType);
-    return *bindings;
-}
-
-template <typename Object, typename Return, typename... Args>
+// Each captureless lambda has a unique type. That lets the generated native
+// thunk retain its policy data in static storage and inline the SDK call,
+// without an auxiliary object or a handwritten wrapper per method.
+template <typename Object, typename Return, typename... Args, typename Function, typename Rejected>
+    requires(std::is_empty_v<Function> &&
+             std::is_default_constructible_v<Function> &&
+             std::is_convertible_v<Rejected, Return> &&
+             !std::is_invocable_r_v<Return, Rejected, Object *>)
 static int RegisterGuardedMutationMethod(
     asIScriptEngine *engine,
     const char *objectType,
     const char *declaration,
     const char *apiName,
-    typename GuardedMutationMethod<Object, Return, Args...>::Function function,
-    Return rejectedValue) {
-    using Binding = GuardedMutationMethod<Object, Return, Args...>;
-    return GetGuardedMutationBindings(engine).Register(
-        engine,
-        objectType,
-        declaration,
-        std::make_unique<Binding>(apiName, function, rejectedValue));
+    Function,
+    Rejected rejectedValue) {
+    using Thunk = GuardedMutationThunk<Object, Return, Function, Args...>;
+    Thunk::Configure(apiName, static_cast<Return>(rejectedValue));
+    return engine->RegisterObjectMethod(
+        objectType, declaration, asFunctionPtr(&Thunk::Invoke), asCALL_CDECL_OBJFIRST);
 }
 
-template <typename Object, typename Return, typename... Args>
+template <typename Object, typename Return, typename... Args, typename Function, typename Rejection>
+    requires(std::is_empty_v<Function> &&
+             std::is_default_constructible_v<Function> &&
+             std::is_empty_v<Rejection> &&
+             std::is_default_constructible_v<Rejection> &&
+             std::is_invocable_r_v<Return, Rejection, Object *>)
 static int RegisterGuardedMutationMethod(
     asIScriptEngine *engine,
     const char *objectType,
     const char *declaration,
     const char *apiName,
-    typename GuardedMutationMethod<Object, Return, Args...>::Function function,
-    typename GuardedMutationMethod<Object, Return, Args...>::Rejection rejection) {
-    using Binding = GuardedMutationMethod<Object, Return, Args...>;
-    return GetGuardedMutationBindings(engine).Register(
-        engine,
-        objectType,
-        declaration,
-        std::make_unique<Binding>(apiName, function, rejection));
+    Function,
+    Rejection) {
+    using Thunk = GuardedMutationThunkWithRejection<Object, Return, Function, Rejection, Args...>;
+    Thunk::Configure(apiName);
+    return engine->RegisterObjectMethod(
+        objectType, declaration, asFunctionPtr(&Thunk::Invoke), asCALL_CDECL_OBJFIRST);
 }
 
-template <typename Object, typename... Args>
+template <typename Object, typename... Args, typename Function>
+    requires(std::is_empty_v<Function> && std::is_default_constructible_v<Function>)
 static int RegisterGuardedVoidMutationMethod(
     asIScriptEngine *engine,
     const char *objectType,
     const char *declaration,
     const char *apiName,
-    typename GuardedMutationMethod<Object, void, Args...>::Function function) {
-    using Binding = GuardedMutationMethod<Object, void, Args...>;
-    return GetGuardedMutationBindings(engine).Register(
-        engine,
-        objectType,
-        declaration,
-        std::make_unique<Binding>(apiName, function));
+    Function) {
+    using Thunk = GuardedVoidMutationThunk<Object, Function, Args...>;
+    Thunk::Configure(apiName);
+    return engine->RegisterObjectMethod(
+        objectType, declaration, asFunctionPtr(&Thunk::Invoke), asCALL_CDECL_OBJFIRST);
 }
 
 template <typename T>
