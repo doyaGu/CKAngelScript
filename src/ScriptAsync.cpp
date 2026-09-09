@@ -1650,11 +1650,15 @@ ScriptAsyncOwnerId ScriptAsyncScheduler::CreateOwner() {
 }
 
 bool ScriptAsyncScheduler::RejectTaskCreation() const {
+    bool filterSetException = false;
     if (!ScriptManager::RejectActiveHostCall("Async::Schedule",
-                                             CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) {
+                                             CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK,
+                                             &filterSetException)) {
         return false;
     }
-    SetScriptException("Async work is not available in the current script host phase.");
+    if (!filterSetException) {
+        SetScriptException("Async work is not available in the current script host phase.");
+    }
     return true;
 }
 

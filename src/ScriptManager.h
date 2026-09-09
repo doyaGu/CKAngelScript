@@ -288,7 +288,9 @@ public:
         return (ScriptManager *) engine->GetUserData(SCRIPT_MANAGER_TYPE);
     }
 
-    static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
+    static bool RejectActiveHostCall(const char *apiName,
+                                     CKDWORD flags,
+                                     bool *filterSetException = nullptr);
     static bool RejectActiveHostMutation(const char *apiName);
 
 protected:
@@ -330,6 +332,7 @@ protected:
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
     int m_MessageOutputSuppressionDepth = 0;
+    std::uint64_t m_ActiveContextExceptionSerial = 0;
     bool m_ResetOrphanCleanupPending = false;
 };
 

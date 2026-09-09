@@ -241,6 +241,8 @@ struct HostCallFilterProbeData {
     int CallCount = 0;
     const char *LastApiName = nullptr;
     CKDWORD LastFlags = 0;
+    CKAngelScriptApi *Api = nullptr;
+    const char *RejectionMessage = nullptr;
 };
 
 struct MetadataProbe {
@@ -536,10 +538,13 @@ CKAS_STATUS HostCallFilterProbe(const char *apiName, CKDWORD flags, void *userDa
     ++data->CallCount;
     data->LastApiName = apiName;
     data->LastFlags = flags;
-    return (flags & (CKAS_HOSTCALL_MUTATES_HOST_STATE |
-                     CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) != 0
-               ? CKAS_INVALIDSTATE
-               : CKAS_OK;
+    const bool rejected =
+        (flags & (CKAS_HOSTCALL_MUTATES_HOST_STATE |
+                  CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK)) != 0;
+    if (rejected && data->Api && data->RejectionMessage) {
+        data->Api->SetActiveContextException(data->RejectionMessage);
+    }
+    return rejected ? CKAS_INVALIDSTATE : CKAS_OK;
 }
 
 CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
@@ -5963,7 +5968,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
+    constexpr const char *behaviorRejectionMessage =
+        "CKBehavior activation rejected by the self-test host phase.";
     hostCallFilterProbe = HostCallFilterProbeData();
+    hostCallFilterProbe.Api = &api;
+    hostCallFilterProbe.RejectionMessage = behaviorRejectionMessage;
     if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
         error = "CKAngelScript API self-test failed to install the CKBehavior mutation filter.";
         context->DestroyObject(behaviorMutationProbe);
@@ -5983,7 +5992,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     context->DestroyObject(behaviorMutationProbe);
     api->ReleaseMethod(activateNativeBehaviorMethod);
     if (rejectedBehaviorStatus != CKAS_EXECUTIONFAILED ||
-        rejectedBehaviorError.find("CKBehavior::Activate is not available") == std::string::npos ||
+        rejectedBehaviorError.find(behaviorRejectionMessage) == std::string::npos ||
+        rejectedBehaviorError.find("CKBehavior::Activate is not available in the current script host phase") != std::string::npos ||
         hostCallFilterProbe.CallCount != 1 ||
         !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKBehavior::Activate") ||
         hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
@@ -6004,7 +6014,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
+    constexpr const char *asyncRejectionMessage =
+        "Async scheduling rejected by the self-test host phase.";
     hostCallFilterProbe = HostCallFilterProbeData();
+    hostCallFilterProbe.Api = &api;
+    hostCallFilterProbe.RejectionMessage = asyncRejectionMessage;
     if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
         error = "CKAngelScript API self-test failed to install the async host-call filter.";
         api->ReleaseMethod(spawnDetachedMethod);
@@ -6024,7 +6038,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
     api->ReleaseMethod(spawnDetachedMethod);
     if (rejectedAsyncStatus != CKAS_EXECUTIONFAILED ||
-        rejectedAsyncError.find("Async work is not available") == std::string::npos ||
+        rejectedAsyncError.find(asyncRejectionMessage) == std::string::npos ||
+        rejectedAsyncError.find("Async work is not available in the current script host phase") != std::string::npos ||
         hostCallFilterProbe.CallCount != 1 ||
         !CkasStringEquals(hostCallFilterProbe.LastApiName, "Async::Schedule") ||
         hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK ||

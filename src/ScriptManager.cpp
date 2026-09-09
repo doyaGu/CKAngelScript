@@ -401,6 +401,7 @@ CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAnge
         return StoreResult(result, CKAS_NOTFOUND, 0, "No active context belongs to this CKAngelScript manager.");
     }
     ctx->SetException(message);
+    ++m_ActiveContextExceptionSerial;
     return StoreResult(result, CKAS_OK);
 }
 
@@ -415,25 +416,43 @@ bool ScriptManager::RejectHostCall(const char *apiName, CKDWORD flags) {
     return m_EngineHost.RejectHostCall(apiName, flags);
 }
 
-bool ScriptManager::RejectActiveHostCall(const char *apiName, CKDWORD flags) {
+bool ScriptManager::RejectActiveHostCall(const char *apiName,
+                                         CKDWORD flags,
+                                         bool *filterSetException) {
+    if (filterSetException) {
+        *filterSetException = false;
+    }
     asIScriptContext *ctx = asGetActiveContext();
     if (!ctx) {
         return false;
     }
     asIScriptEngine *engine = ctx->GetEngine();
     ScriptManager *manager = engine ? GetManager(engine) : nullptr;
-    return manager ? manager->RejectHostCall(apiName, flags) : false;
+    if (!manager) {
+        return false;
+    }
+    const std::uint64_t exceptionSerial = manager->m_ActiveContextExceptionSerial;
+    const bool rejected = manager->RejectHostCall(apiName, flags);
+    if (filterSetException) {
+        *filterSetException = manager->m_ActiveContextExceptionSerial != exceptionSerial;
+    }
+    return rejected;
 }
 
 bool ScriptManager::RejectActiveHostMutation(const char *apiName) {
-    if (!RejectActiveHostCall(apiName, CKAS_HOSTCALL_MUTATES_HOST_STATE)) {
+    bool filterSetException = false;
+    if (!RejectActiveHostCall(apiName,
+                              CKAS_HOSTCALL_MUTATES_HOST_STATE,
+                              &filterSetException)) {
         return false;
     }
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        const std::string message =
-            fmt::format("{} is not available in the current script host phase.",
-                        apiName ? apiName : "Host mutation");
-        ctx->SetException(message.c_str());
+    if (!filterSetException) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            const std::string message =
+                fmt::format("{} is not available in the current script host phase.",
+                            apiName ? apiName : "Host mutation");
+            ctx->SetException(message.c_str());
+        }
     }
     return true;
 }
