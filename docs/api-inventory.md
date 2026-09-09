@@ -78,6 +78,8 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 
 These bindings intentionally stay close to native SDK naming. Prefer high-level APIs for identity, scene lookup, behavior control, and diagnostics; use raw SDK methods for the final engine operation.
 
+CKAngelScript does not apply an embedder-defined phase allowlist to these calls. It owns AngelScript execution and module/handle lifetime correctness; application-specific reload transaction boundaries belong to the embedding host and its documentation.
+
 ## Public API
 
 `CKAngelScript` and the `CKAngelScript...` functions are the native integration point for other plugins. C++ users can use `CKAngelScriptApi`, which is a non-owning inline wrapper over those C functions, plus move-only RAII wrappers for public handles.
@@ -101,6 +103,7 @@ Supporting public structs/enums are `CKAS_STATUS`, `CKAS_FEATURE`, `CKAS_CALLFLA
 - Prefer SDK-driven metadata over hard-coded game or plugin-specific tables.
 - Treat bytecode as an executable module cache only. CKAngelScript metadata reflection is backed by `CScriptBuilder` source metadata, so bytecode-only module loads need a source/metadata sidecar if callers still need metadata diagnostics or discovery.
 - Treat module graph/fingerprint data as CKAngelScript diagnostics. It explains public load/import API activity and source-section snapshot includes, but raw AngelScript mutations can bypass it.
+- Keep embedder-specific reload policy out of per-method bindings. Enforce engine, module, handle, and execution lifetime invariants here; let the embedding host document which external side effects its reload transaction can restore.
 - Add new public entry points only through the C ABI in `include/CKAngelScript.h`, then mirror them in the C++ wrapper and document result lifetime rules.
 - For every public callback, document whether callback functions and `UserData` are call-scope, callback-scope, handle-scope, or registration-scope.
 - When adding raw bindings, update `docs/sdk-bindings.md` if a new binding area appears.

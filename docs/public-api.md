@@ -74,6 +74,8 @@ The public API deliberately separates borrowed AngelScript pointers from CKAngel
 
 Borrowed raw AngelScript pointers are escape hatches. Directly mutating module import bindings through `asIScriptModule` bypasses CKAngelScript's import dependency tracking, so provider reload blocking and reload diagnostics only cover bindings made through `CKAngelScriptBindImportedFunction()` or `CKAngelScriptBindAllImportedFunctions()`.
 
+The public ABI enforces CKAngelScript's own engine, module, handle, execution, and reentrancy invariants. It does not define an embedder-specific phase allowlist for script-visible CK/Vx calls; hosts such as mod loaders must define their reload transaction and external-side-effect boundary above this API.
+
 All out pointer APIs clear the out pointer before validation and leave it null on failure.
 
 All public options and engine-extension structs must be zero-initialized and set `Size >= sizeof(the matching header struct)`. `Size == 0` or a truncated struct returns `CKAS_INVALIDARGUMENT`; larger sizes are accepted so future struct extensions can be ignored by older binaries.
