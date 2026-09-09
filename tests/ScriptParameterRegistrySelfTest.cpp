@@ -8475,6 +8475,8 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         !entityType->GetMethodByDecl("CK3dEntity@ HierarchyParser(CK3dEntity@ current) const") ||
         !entityType->GetMethodByDecl("CKERROR AddMesh(CKMesh@ mesh)") ||
         !entityType->GetMethodByDecl("CKERROR RemoveMesh(CKMesh@ mesh)") ||
+        !entityType->GetMethodByDecl("void SetOrientation(const VxVector &in dir, const VxVector &in up, CK3dEntity@ ref = null, bool keepChildren = false)") ||
+        !entityType->GetMethodByDecl("void SetOrientation(const VxVector &in dir, const VxVector &in up, const VxVector &in right, CK3dEntity@ ref = null, bool keepChildren = false)") ||
         !entityType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
         !entityType->GetMethodByDecl("void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
         !entityType->GetMethodByDecl("bool AddPreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
@@ -8519,6 +8521,7 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         "  entity.AddScale(VxVector(1.0f, 1.0f, 1.0f));\n"
         "  VxVector dir; VxVector up; VxVector right;\n"
         "  entity.GetOrientation(dir, up, right);\n"
+        "  entity.SetOrientation(dir, up);\n"
         "  entity.SetOrientation(dir, up, right);\n"
         "  VxVector src(1.0f, 2.0f, 3.0f);\n"
         "  VxVector dst;\n"

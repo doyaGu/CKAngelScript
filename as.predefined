@@ -2809,7 +2809,8 @@ class CK3dEntity {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -3005,7 +3006,8 @@ class CK3dObject {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -4120,7 +4122,8 @@ class CKBodyPart {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -4311,7 +4314,8 @@ class CKCamera {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     void SetOrthographicZoom(float zoom);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
@@ -4518,7 +4522,8 @@ class CKCharacter {
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
     CKERROR SetNextActiveAnimation(CKAnimation@ anim, uint transitionMode, float warpLength = 0.0);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -4977,7 +4982,8 @@ class CKCurve {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -5169,7 +5175,8 @@ class CKCurvePoint {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -5782,7 +5789,8 @@ class CKGrid {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     void SetOrientationMode(CK_GRIDORIENTATION orientation);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
@@ -6607,7 +6615,8 @@ class CKLight {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -8638,7 +8647,8 @@ class CKPlace {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -9947,7 +9957,8 @@ class CKSprite3D {
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
     void SetOffset(const Vx2DVector&in vect);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);
@@ -10565,7 +10576,8 @@ class CKTargetCamera {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     void SetOrthographicZoom(float zoom);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
@@ -10765,7 +10777,8 @@ class CKTargetLight {
     void SetLocalMatrix(const VxMatrix&in Mat, bool KeepChildren = false);
     void SetMoveableFlags(uint flags);
     void SetName(const string&in name, bool shared = false);
-    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false);
+    void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false);
     bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true);
     void SetPickable(bool pick = true);
     void SetPosition(const VxVector&in pos, CK3dEntity@ ref = null, bool keepChildren = false);

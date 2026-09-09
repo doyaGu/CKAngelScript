@@ -64180,11 +64180,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ck3dentity::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ck3dentity::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CK3dEntity",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ck3dentity::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CK3dEntity",
           "functionType": "system",
@@ -64233,7 +64300,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -71518,11 +71585,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ck3dobject::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ck3dobject::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CK3dObject",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ck3dobject::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CK3dObject",
           "functionType": "system",
@@ -71571,7 +71705,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -110211,11 +110345,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckbodypart::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckbodypart::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKBodyPart",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckbodypart::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKBodyPart",
           "functionType": "system",
@@ -110264,7 +110465,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -117506,11 +117707,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcamera::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckcamera::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKCamera",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcamera::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKCamera",
           "functionType": "system",
@@ -117559,7 +117827,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -125423,11 +125691,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcharacter::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckcharacter::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKCharacter",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcharacter::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKCharacter",
           "functionType": "system",
@@ -125476,7 +125811,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -142750,11 +143085,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcurve::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckcurve::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKCurve",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcurve::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKCurve",
           "functionType": "system",
@@ -142803,7 +143205,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -150126,11 +150528,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcurvepoint::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckcurvepoint::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKCurvePoint",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcurvepoint::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKCurvePoint",
           "functionType": "system",
@@ -150179,7 +150648,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -172685,11 +173154,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckgrid::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckgrid::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKGrid",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckgrid::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKGrid",
           "functionType": "system",
@@ -172738,7 +173274,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -201449,11 +201985,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::cklight::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::cklight::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKLight",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::cklight::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKLight",
           "functionType": "system",
@@ -201502,7 +202105,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -271727,11 +272330,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckplace::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::ckplace::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKPlace",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckplace::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKPlace",
           "functionType": "system",
@@ -271780,7 +272450,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -317201,11 +317871,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::cksprite3d::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::cksprite3d::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKSprite3D",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::cksprite3d::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKSprite3D",
           "functionType": "system",
@@ -317254,7 +317991,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -340684,11 +341421,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::cktargetcamera::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::cktargetcamera::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKTargetCamera",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::cktargetcamera::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKTargetCamera",
           "functionType": "system",
@@ -340737,7 +341541,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -348236,11 +349040,78 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::cktargetlight::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right = void, ck3dentity@ ref = null, bool keepchildren = false)",
+          "docId": "method::::cktargetlight::void setorientation(const vxvector&in dir, const vxvector&in up, ck3dentity@ ref = null, bool keepchildren = false)",
           "name": "SetOrientation",
           "namespace": "",
-          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
-          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right = void, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "memberRole": "method",
+          "objectName": "CKTargetLight",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "void",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "dir",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "up",
+              "type": "VxVector",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "ref",
+              "type": "CK3dEntity@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "null"
+            },
+            {
+              "index": 3,
+              "name": "keepChildren",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::cktargetlight::void setorientation(const vxvector&in dir, const vxvector&in up, const vxvector&in right, ck3dentity@ ref = null, bool keepchildren = false)",
+          "name": "SetOrientation",
+          "namespace": "",
+          "declaration": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
+          "declarationWithNamespace": "void SetOrientation(const VxVector&in dir, const VxVector&in up, const VxVector&in right, CK3dEntity@ ref = null, bool keepChildren = false)",
           "memberRole": "method",
           "objectName": "CKTargetLight",
           "functionType": "system",
@@ -348289,7 +349160,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 3,

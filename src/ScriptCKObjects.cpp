@@ -4479,6 +4479,15 @@ static void SetCK3dEntityOrientation(T *self,
 }
 
 template <typename T>
+static void SetCK3dEntityOrientationWithoutRight(T *self,
+                                                 const VxVector &direction,
+                                                 const VxVector &up,
+                                                 CK3dEntity *reference,
+                                                 bool keepChildren) {
+    SetCK3dEntityOrientation(self, direction, up, nullptr, reference, keepChildren);
+}
+
+template <typename T>
 static void SetCK3dEntityQuaternion(T *self,
                                     const VxQuaternion &quaternion,
                                     CK3dEntity *reference,
@@ -4645,7 +4654,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetPosition(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityPositionVector<T>, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetPosition(VxVector&out Pos, CK3dEntity@ Ref = null) const", asMETHODPR(T, GetPosition, (VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetOrientation(const VxVector &in dir, const VxVector &in up, const VxVector &in right = void, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityOrientation<T>, (T *, const VxVector &, const VxVector &, const VxVector *, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOrientation(const VxVector &in dir, const VxVector &in up, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityOrientationWithoutRight<T>, (T *, const VxVector &, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOrientation(const VxVector &in dir, const VxVector &in up, const VxVector &in right, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(SetCK3dEntityOrientation<T>, (T *, const VxVector &, const VxVector &, const VxVector *, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetOrientation(VxVector &out dir, VxVector &out up, VxVector &out right = void, CK3dEntity@ ref = null)", asMETHODPR(T, GetOrientation, (VxVector *, VxVector *, VxVector *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void SetQuaternion(const VxQuaternion &in quat, CK3dEntity@ ref = null, bool keepChildren = false, bool keepScale = false)", asFUNCTIONPR(SetCK3dEntityQuaternion<T>, (T *, const VxQuaternion &, CK3dEntity *, bool, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
