@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -193,81 +194,221 @@ static void RegisterCKObjectCast(asIScriptEngine *engine, const char *derived, c
     r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
-static bool RejectCKObjectMutation(const char *method) {
-    return ScriptManager::RejectActiveHostMutation(method);
+static bool AllowCKObjectMutation(const char *method) {
+    return !ScriptManager::RejectActiveHostMutation(method);
+}
+
+class GuardedMutationBinding {
+public:
+    virtual ~GuardedMutationBinding() = default;
+};
+
+template <typename Object, typename Return, typename... Args>
+class GuardedMutationMethod final : public GuardedMutationBinding {
+public:
+    using Function = Return (*)(Object *, Args...);
+    using Rejection = Return (*)(Object *);
+
+    GuardedMutationMethod(const char *apiName, Function function, Return rejectedValue)
+        : m_ApiName(apiName), m_Function(function), m_RejectedValue(rejectedValue) {}
+
+    GuardedMutationMethod(const char *apiName, Function function, Rejection rejection)
+        : m_ApiName(apiName), m_Function(function), m_Rejection(rejection) {}
+
+    Return Invoke(Object *self, Args... args) {
+        if (!AllowCKObjectMutation(m_ApiName)) {
+            return m_Rejection ? m_Rejection(self) : m_RejectedValue;
+        }
+        return m_Function(self, args...);
+    }
+
+private:
+    const char *m_ApiName;
+    Function m_Function;
+    Return m_RejectedValue{};
+    Rejection m_Rejection = nullptr;
+};
+
+template <typename Object, typename... Args>
+class GuardedMutationMethod<Object, void, Args...> final : public GuardedMutationBinding {
+public:
+    using Function = void (*)(Object *, Args...);
+
+    GuardedMutationMethod(const char *apiName, Function function)
+        : m_ApiName(apiName), m_Function(function) {}
+
+    void Invoke(Object *self, Args... args) {
+        if (AllowCKObjectMutation(m_ApiName)) {
+            m_Function(self, args...);
+        }
+    }
+
+private:
+    const char *m_ApiName;
+    Function m_Function;
+};
+
+constexpr asPWORD kGuardedMutationBindingsType = 3002;
+
+class GuardedMutationBindings {
+public:
+    std::vector<std::unique_ptr<GuardedMutationBinding>> Entries;
+};
+
+static GuardedMutationBindings *GetGuardedMutationBindings(asIScriptEngine *engine) {
+    auto *bindings = static_cast<GuardedMutationBindings *>(
+        engine->GetUserData(kGuardedMutationBindingsType));
+    if (bindings) {
+        return bindings;
+    }
+
+    bindings = new GuardedMutationBindings();
+    engine->SetUserData(bindings, kGuardedMutationBindingsType);
+    engine->SetEngineUserDataCleanupCallback([](asIScriptEngine *owner) {
+        auto *ownedBindings = static_cast<GuardedMutationBindings *>(
+            owner->SetUserData(nullptr, kGuardedMutationBindingsType));
+        delete ownedBindings;
+    }, kGuardedMutationBindingsType);
+    return bindings;
+}
+
+template <typename Binding>
+static int RegisterGuardedMutationBinding(asIScriptEngine *engine,
+                                          const char *objectType,
+                                          const char *declaration,
+                                          std::unique_ptr<Binding> binding) {
+    Binding *auxiliary = binding.get();
+    auto invoke = &Binding::Invoke;
+    const int result = engine->RegisterObjectMethod(
+        objectType,
+        declaration,
+        asSMethodPtr<sizeof(invoke)>::Convert(invoke),
+        asCALL_THISCALL_OBJFIRST,
+        auxiliary);
+    if (result >= 0) {
+        GetGuardedMutationBindings(engine)->Entries.emplace_back(std::move(binding));
+    }
+    return result;
+}
+
+template <typename Object, typename Return, typename... Args>
+static int RegisterGuardedMutationMethod(
+    asIScriptEngine *engine,
+    const char *objectType,
+    const char *declaration,
+    const char *apiName,
+    typename GuardedMutationMethod<Object, Return, Args...>::Function function,
+    Return rejectedValue) {
+    using Binding = GuardedMutationMethod<Object, Return, Args...>;
+    return RegisterGuardedMutationBinding(
+        engine,
+        objectType,
+        declaration,
+        std::make_unique<Binding>(apiName, function, rejectedValue));
+}
+
+template <typename Object, typename Return, typename... Args>
+static int RegisterGuardedMutationMethod(
+    asIScriptEngine *engine,
+    const char *objectType,
+    const char *declaration,
+    const char *apiName,
+    typename GuardedMutationMethod<Object, Return, Args...>::Function function,
+    typename GuardedMutationMethod<Object, Return, Args...>::Rejection rejection) {
+    using Binding = GuardedMutationMethod<Object, Return, Args...>;
+    return RegisterGuardedMutationBinding(
+        engine,
+        objectType,
+        declaration,
+        std::make_unique<Binding>(apiName, function, rejection));
+}
+
+template <typename Object, typename... Args>
+static int RegisterGuardedVoidMutationMethod(
+    asIScriptEngine *engine,
+    const char *objectType,
+    const char *declaration,
+    const char *apiName,
+    typename GuardedMutationMethod<Object, void, Args...>::Function function) {
+    using Binding = GuardedMutationMethod<Object, void, Args...>;
+    return RegisterGuardedMutationBinding(
+        engine,
+        objectType,
+        declaration,
+        std::make_unique<Binding>(apiName, function));
 }
 
 template <typename T>
 static void SetCKObjectName(T *self, const std::string &name, bool shared) {
-    if (!RejectCKObjectMutation("CKObject::SetName")) {
+    if (AllowCKObjectMutation("CKObject::SetName")) {
         self->SetName(const_cast<CKSTRING>(name.c_str()), shared);
     }
 }
 
 template <typename T>
 static void SetCKObjectAppData(T *self, NativePointer data) {
-    if (!RejectCKObjectMutation("CKObject::SetAppData")) {
+    if (AllowCKObjectMutation("CKObject::SetAppData")) {
         self->SetAppData(data.Get());
     }
 }
 
 template <typename T>
 static void ShowCKObject(T *self, CK_OBJECT_SHOWOPTION option) {
-    if (!RejectCKObjectMutation("CKObject::Show")) {
+    if (AllowCKObjectMutation("CKObject::Show")) {
         self->Show(option);
     }
 }
 
 template <typename T>
 static void ModifyCKObjectFlags(T *self, CKDWORD add, CKDWORD remove) {
-    if (!RejectCKObjectMutation("CKObject::ModifyObjectFlags")) {
+    if (AllowCKObjectMutation("CKObject::ModifyObjectFlags")) {
         static_cast<CKObject *>(self)->ModifyObjectFlags(add, remove);
     }
 }
 
 template <typename T>
 static void PreSaveCKObject(T *self, CKFile *file, CKDWORD flags) {
-    if (!RejectCKObjectMutation("CKObject::PreSave")) {
+    if (AllowCKObjectMutation("CKObject::PreSave")) {
         self->PreSave(file, flags);
     }
 }
 
 template <typename T>
 static CKStateChunk *SaveCKObject(T *self, CKFile *file, CKDWORD flags) {
-    return RejectCKObjectMutation("CKObject::Save") ? nullptr : self->Save(file, flags);
+    return AllowCKObjectMutation("CKObject::Save") ? self->Save(file, flags) : nullptr;
 }
 
 template <typename T>
 static CKERROR LoadCKObject(T *self, CKStateChunk *chunk, CKFile *file) {
-    return RejectCKObjectMutation("CKObject::Load")
-               ? CKERR_INVALIDOPERATION
-               : self->Load(chunk, file);
+    return AllowCKObjectMutation("CKObject::Load")
+               ? self->Load(chunk, file)
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
 static void PostLoadCKObject(T *self) {
-    if (!RejectCKObjectMutation("CKObject::PostLoad")) {
+    if (AllowCKObjectMutation("CKObject::PostLoad")) {
         self->PostLoad();
     }
 }
 
 template <typename T>
 static void PreDeleteCKObject(T *self) {
-    if (!RejectCKObjectMutation("CKObject::PreDelete")) {
+    if (AllowCKObjectMutation("CKObject::PreDelete")) {
         self->PreDelete();
     }
 }
 
 template <typename T>
 static void CheckPreDeletionCKObject(T *self) {
-    if (!RejectCKObjectMutation("CKObject::CheckPreDeletion")) {
+    if (AllowCKObjectMutation("CKObject::CheckPreDeletion")) {
         self->CheckPreDeletion();
     }
 }
 
 template <typename T>
 static void CheckPostDeletionCKObject(T *self) {
-    if (!RejectCKObjectMutation("CKObject::CheckPostDeletion")) {
+    if (AllowCKObjectMutation("CKObject::CheckPostDeletion")) {
         self->CheckPostDeletion();
     }
 }
@@ -275,7 +416,7 @@ static void CheckPostDeletionCKObject(T *self) {
 #if CKVERSION == 0x13022002
 template <typename T>
 static CKERROR PrepareCKObjectDependencies(T *self, CKDependenciesContext &context) {
-    if (RejectCKObjectMutation("CKObject::PrepareDependencies")) {
+    if (!AllowCKObjectMutation("CKObject::PrepareDependencies")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->PrepareDependencies(context);
@@ -285,7 +426,7 @@ template <typename T>
 static CKERROR PrepareCKObjectDependencies(T *self,
                                           CKDependenciesContext &context,
                                           bool caller) {
-    if (RejectCKObjectMutation("CKObject::PrepareDependencies")) {
+    if (!AllowCKObjectMutation("CKObject::PrepareDependencies")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->PrepareDependencies(context, caller);
@@ -294,9 +435,9 @@ static CKERROR PrepareCKObjectDependencies(T *self,
 
 template <typename T>
 static CKERROR RemapCKObjectDependencies(T *self, CKDependenciesContext &context) {
-    return RejectCKObjectMutation("CKObject::RemapDependencies")
-               ? CKERR_INVALIDOPERATION
-               : self->RemapDependencies(context);
+    return AllowCKObjectMutation("CKObject::RemapDependencies")
+               ? self->RemapDependencies(context)
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
@@ -304,9 +445,9 @@ static CKERROR DestroyCKObject(T *self,
                                CKObject *object,
                                CKDWORD flags,
                                CKDependencies *dependencies) {
-    return RejectCKObjectMutation("CKObject::CKDestroyObject")
-               ? CKERR_INVALIDOPERATION
-               : self->CKDestroyObject(object, flags, dependencies);
+    return AllowCKObjectMutation("CKObject::CKDestroyObject")
+               ? self->CKDestroyObject(object, flags, dependencies)
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
@@ -314,9 +455,9 @@ static CKERROR DestroyCKObjectById(T *self,
                                    CK_ID id,
                                    CKDWORD flags,
                                    CKDependencies *dependencies) {
-    return RejectCKObjectMutation("CKObject::CKDestroyObject")
-               ? CKERR_INVALIDOPERATION
-               : self->CKDestroyObject(id, flags, dependencies);
+    return AllowCKObjectMutation("CKObject::CKDestroyObject")
+               ? self->CKDestroyObject(id, flags, dependencies)
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
@@ -324,9 +465,9 @@ static CKERROR DestroyCKObjects(T *self,
                                 const XObjectArray &objects,
                                 CKDWORD flags,
                                 CKDependencies *dependencies) {
-    return RejectCKObjectMutation("CKObject::CKDestroyObjects")
-               ? CKERR_INVALIDOPERATION
-               : self->CKDestroyObjects(objects.Begin(), objects.Size(), flags, dependencies);
+    return AllowCKObjectMutation("CKObject::CKDestroyObjects")
+               ? self->CKDestroyObjects(objects.Begin(), objects.Size(), flags, dependencies)
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
@@ -337,7 +478,7 @@ static CKERROR CopyCKObject(T *self, CKObject *obj, CKDependenciesContext &conte
         }
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKObject::Copy")) {
+    if (!AllowCKObjectMutation("CKObject::Copy")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->Copy(*obj, context);
@@ -347,7 +488,7 @@ static CKERROR CopyCKCurvePoint(CKCurvePoint *self, CKObject *obj, CKDependencie
     if (!self || !obj) {
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKObject::Copy")) {
+    if (!AllowCKObjectMutation("CKObject::Copy")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->Copy(*obj, context);
@@ -495,7 +636,7 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(0);
     void *buf = gen->GetArgAddress(0);
 
-    if (RejectCKObjectMutation("CKParameterIn::GetValue(update=true)")) {
+    if (!AllowCKObjectMutation("CKParameterIn::GetValue(update=true)")) {
         gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
@@ -518,7 +659,7 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 
 template <typename T>
 static NativeBuffer *GetCKParameterInReadData(T *self) {
-    if (RejectCKObjectMutation("CKParameterIn::GetReadData(update=true)")) {
+    if (!AllowCKObjectMutation("CKParameterIn::GetReadData(update=true)")) {
         return NativeBuffer::Create(0);
     }
     if (!self) {
@@ -545,7 +686,7 @@ static CKERROR SetCKParameterInDirectSource(T *self, CKParameter *param) {
             ctx->SetException("CKParameterIn.SetDirectSource requires a valid input parameter.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKParameterIn::SetDirectSource")) {
+    if (!AllowCKObjectMutation("CKParameterIn::SetDirectSource")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->SetDirectSource(param);
@@ -558,7 +699,7 @@ static CKERROR ShareCKParameterInSourceWith(T *self, CKParameterIn *pin) {
             ctx->SetException("CKParameterIn.ShareSourceWith requires a non-null input parameter.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKParameterIn::ShareSourceWith")) {
+    if (!AllowCKObjectMutation("CKParameterIn::ShareSourceWith")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->ShareSourceWith(pin);
@@ -576,7 +717,7 @@ static void SetCKParameterInOwner(T *self, CKObject *owner) {
             ctx->SetException("CKParameterIn.SetOwner only accepts CKBehavior or CKParameterOperation owners.");
         return;
     }
-    if (RejectCKObjectMutation("CKParameterIn::SetOwner")) {
+    if (!AllowCKObjectMutation("CKParameterIn::SetOwner")) {
         return;
     }
     self->SetOwner(owner);
@@ -586,7 +727,7 @@ template <typename T>
 static void SetCKParameterInType(T *self, CKParameterType type, bool updateSource) {
     if (!self)
         return;
-    if (RejectCKObjectMutation("CKParameterIn::SetType"))
+    if (!AllowCKObjectMutation("CKParameterIn::SetType"))
         return;
     self->SetType(type, updateSource, nullptr);
 }
@@ -595,7 +736,7 @@ template <typename T>
 static void SetCKParameterInTypeNamed(T *self, CKParameterType type, bool updateSource, const std::string &newName) {
     if (!self)
         return;
-    if (RejectCKObjectMutation("CKParameterIn::SetType"))
+    if (!AllowCKObjectMutation("CKParameterIn::SetType"))
         return;
     std::vector<char> buffer(newName.begin(), newName.end());
     buffer.push_back('\0');
@@ -606,7 +747,7 @@ template <typename T>
 static void SetCKParameterInGuid(T *self, CKGUID guid, bool updateSource) {
     if (!self)
         return;
-    if (RejectCKObjectMutation("CKParameterIn::SetGUID"))
+    if (!AllowCKObjectMutation("CKParameterIn::SetGUID"))
         return;
     self->SetGUID(guid, updateSource, nullptr);
 }
@@ -615,7 +756,7 @@ template <typename T>
 static void SetCKParameterInGuidNamed(T *self, CKGUID guid, bool updateSource, const std::string &newName) {
     if (!self)
         return;
-    if (RejectCKObjectMutation("CKParameterIn::SetGUID"))
+    if (!AllowCKObjectMutation("CKParameterIn::SetGUID"))
         return;
     std::vector<char> buffer(newName.begin(), newName.end());
     buffer.push_back('\0');
@@ -697,7 +838,7 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
-    if (update && RejectCKObjectMutation("CKParameter::GetValue(update=true)")) {
+    if (update && !AllowCKObjectMutation("CKParameter::GetValue(update=true)")) {
         gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
@@ -720,7 +861,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
-    if (RejectCKObjectMutation("CKParameter::SetValue")) {
+    if (!AllowCKObjectMutation("CKParameter::SetValue")) {
         gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
@@ -730,7 +871,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
 
 template <typename T>
 static int GetCKParameterStringValue(T *self, std::string &value, bool update) {
-    if (update && RejectCKObjectMutation("CKParameter::GetStringValue(update=true)")) {
+    if (update && !AllowCKObjectMutation("CKParameter::GetStringValue(update=true)")) {
         value.clear();
         return CKERR_INVALIDOPERATION;
     }
@@ -746,7 +887,7 @@ static CKERROR SetCKParameterStringValue(T *self, const std::string &value) {
         return CKERR_INVALIDPARAMETER;
     }
 
-    if (RejectCKObjectMutation("CKParameter::SetStringValue")) {
+    if (!AllowCKObjectMutation("CKParameter::SetStringValue")) {
         return CKERR_INVALIDOPERATION;
     }
 
@@ -763,7 +904,7 @@ static CKERROR CopyCKParameterValue(T *self, CKParameter *param, bool updatePara
         }
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKParameter::CopyValue")) {
+    if (!AllowCKObjectMutation("CKParameter::CopyValue")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->CopyValue(param, updateParam);
@@ -782,7 +923,7 @@ static bool IsCKParameterCompatibleWith(T *self, CKParameter *param) {
 
 template <typename T>
 static NativeBuffer *GetCKParameterReadData(T *self, bool update) {
-    if (update && RejectCKObjectMutation("CKParameter::GetReadData(update=true)")) {
+    if (update && !AllowCKObjectMutation("CKParameter::GetReadData(update=true)")) {
         return NativeBuffer::Create(0);
     }
     if (!self) {
@@ -825,7 +966,7 @@ static CKParameterTypeDesc &GetCKParameterTypeDesc(T *self) {
 
 template <typename T>
 static CKObject *GetCKParameterValueObject(T *self, bool update) {
-    if (update && RejectCKObjectMutation("CKParameter::GetValueObject(update=true)")) {
+    if (update && !AllowCKObjectMutation("CKParameter::GetValueObject(update=true)")) {
         return nullptr;
     }
     return self->GetValueObject(update);
@@ -833,28 +974,28 @@ static CKObject *GetCKParameterValueObject(T *self, bool update) {
 
 template <typename T>
 static void SetCKParameterType(T *self, CKParameterType type) {
-    if (!RejectCKObjectMutation("CKParameter::SetType")) {
+    if (AllowCKObjectMutation("CKParameter::SetType")) {
         self->SetType(type);
     }
 }
 
 template <typename T>
 static void SetCKParameterGuid(T *self, CKGUID guid) {
-    if (!RejectCKObjectMutation("CKParameter::SetGUID")) {
+    if (AllowCKObjectMutation("CKParameter::SetGUID")) {
         self->SetGUID(guid);
     }
 }
 
 template <typename T>
 static void SetCKParameterOwner(T *self, CKObject *owner) {
-    if (!RejectCKObjectMutation("CKParameter::SetOwner")) {
+    if (AllowCKObjectMutation("CKParameter::SetOwner")) {
         self->SetOwner(owner);
     }
 }
 
 template <typename T>
 static void EnableCKParameter(T *self, bool active) {
-    if (!RejectCKObjectMutation("CKParameter::Enable")) {
+    if (AllowCKObjectMutation("CKParameter::Enable")) {
         self->Enable(active);
     }
 }
@@ -917,7 +1058,7 @@ static CKERROR AddCKParameterOutDestination(T *self, CKParameter *param, bool ch
             ctx->SetException("CKParameterOut.AddDestination requires a non-null parameter.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (RejectCKObjectMutation("CKParameterOut::AddDestination")) {
+    if (!AllowCKObjectMutation("CKParameterOut::AddDestination")) {
         return CKERR_INVALIDOPERATION;
     }
     return self->AddDestination(param, checkType);
@@ -930,7 +1071,7 @@ static void RemoveCKParameterOutDestination(T *self, CKParameter *param) {
             ctx->SetException("CKParameterOut.RemoveDestination requires a non-null parameter.");
         return;
     }
-    if (RejectCKObjectMutation("CKParameterOut::RemoveDestination")) {
+    if (!AllowCKObjectMutation("CKParameterOut::RemoveDestination")) {
         return;
     }
     self->RemoveDestination(param);
@@ -938,14 +1079,14 @@ static void RemoveCKParameterOutDestination(T *self, CKParameter *param) {
 
 template <typename T>
 static void NotifyCKParameterOutDataChanged(T *self) {
-    if (!RejectCKObjectMutation("CKParameterOut::DataChanged")) {
+    if (AllowCKObjectMutation("CKParameterOut::DataChanged")) {
         self->DataChanged();
     }
 }
 
 template <typename T>
 static void RemoveAllCKParameterOutDestinations(T *self) {
-    if (!RejectCKObjectMutation("CKParameterOut::RemoveAllDestinations")) {
+    if (AllowCKObjectMutation("CKParameterOut::RemoveAllDestinations")) {
         self->RemoveAllDestinations();
     }
 }
@@ -992,7 +1133,7 @@ static void RegisterCKParameterLocalMembers(asIScriptEngine *engine, const char 
 
     RegisterCKParameterMembers<T>(engine, name);
 
-    r = engine->RegisterObjectMethod(name, "void SetAsMyselfParameter(bool act)", asFUNCTIONPR([](T *self, bool active) { if (RejectCKObjectMutation("CKParameterLocal::SetAsMyselfParameter")) return; self->SetAsMyselfParameter(active); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetAsMyselfParameter(bool act)", asFUNCTIONPR([](T *self, bool active) { if (!AllowCKObjectMutation("CKParameterLocal::SetAsMyselfParameter")) return; self->SetAsMyselfParameter(active); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsMyselfParameter()", asFUNCTIONPR([](T *self) -> bool { return self->IsMyselfParameter(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKParameterLocal") != 0) {
@@ -1013,7 +1154,7 @@ static void SetCKParameterOperationOwner(T *self, CKBehavior *owner) {
             ctx->SetException("CKParameterOperation.SetOwner requires a non-null behavior owner.");
         return;
     }
-    if (RejectCKObjectMutation("CKParameterOperation::SetOwner")) {
+    if (!AllowCKObjectMutation("CKParameterOperation::SetOwner")) {
         return;
     }
     self->SetOwner(owner);
@@ -1026,9 +1167,9 @@ static bool HasCKParameterOperationFunction(T *self) {
 
 template <typename T>
 static CKERROR ExecuteCKParameterOperation(T *self) {
-    return RejectCKObjectMutation("CKParameterOperation::DoOperation")
-               ? CKERR_INVALIDOPERATION
-               : self->DoOperation();
+    return AllowCKObjectMutation("CKParameterOperation::DoOperation")
+               ? self->DoOperation()
+               : CKERR_INVALIDOPERATION;
 }
 
 template <typename T>
@@ -1038,7 +1179,7 @@ static void ReconstructCKParameterOperation(T *self,
                                             CKGUID resultGuid,
                                             CKGUID firstGuid,
                                             CKGUID secondGuid) {
-    if (RejectCKObjectMutation("CKParameterOperation::Reconstruct")) {
+    if (!AllowCKObjectMutation("CKParameterOperation::Reconstruct")) {
         return;
     }
     self->Reconstruct(const_cast<CKSTRING>(name.c_str()),
@@ -1681,7 +1822,7 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
                                     : IO == 1
                                         ? "CKBehavior::GetOutputParameterValue(update=true)"
                                         : "CKBehavior::GetLocalParameterValue(update=true)";
-    if (RejectCKObjectMutation(apiName)) {
+    if (!AllowCKObjectMutation(apiName)) {
         gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
@@ -1701,7 +1842,7 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
     constexpr const char *apiName = IO == 1
                                         ? "CKBehavior::SetOutputParameterValue"
                                         : "CKBehavior::SetLocalParameterValue";
-    if (RejectCKObjectMutation(apiName)) {
+    if (!AllowCKObjectMutation(apiName)) {
         gen->SetReturnDWord(CKERR_INVALIDOPERATION);
         return;
     }
@@ -1727,7 +1868,7 @@ static bool RejectCKBehaviorFunctionPointerWrite(const NativePointer &ptr, const
 }
 
 static void SetCKBehaviorFunction(CKBehavior *self, NativePointer fct) {
-    if (RejectCKObjectMutation("CKBehavior::SetFunction")) {
+    if (!AllowCKObjectMutation("CKBehavior::SetFunction")) {
         return;
     }
     if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetFunction only accepts a null NativePointer from script.")) {
@@ -1739,7 +1880,7 @@ static void SetCKBehaviorFunction(CKBehavior *self, NativePointer fct) {
 }
 
 static void SetCKBehaviorCallbackFunction(CKBehavior *self, NativePointer fct) {
-    if (RejectCKObjectMutation("CKBehavior::SetCallbackFunction")) {
+    if (!AllowCKObjectMutation("CKBehavior::SetCallbackFunction")) {
         return;
     }
     if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetCallbackFunction only accepts a null NativePointer from script.")) {
@@ -1751,83 +1892,83 @@ static void SetCKBehaviorCallbackFunction(CKBehavior *self, NativePointer fct) {
 }
 
 static int CallCKBehaviorCallback(CKBehavior *self, CKDWORD message) {
-    return RejectCKObjectMutation("CKBehavior::CallCallbackFunction")
-               ? 0
-               : self->CallCallbackFunction(message);
+    return AllowCKObjectMutation("CKBehavior::CallCallbackFunction")
+               ? self->CallCallbackFunction(message)
+               : 0;
 }
 
 static int CallCKBehaviorSubCallbacks(CKBehavior *self, CKDWORD message, CKGUID *guid) {
-    return RejectCKObjectMutation("CKBehavior::CallSubBehaviorsCallbackFunction")
-               ? 0
-               : self->CallSubBehaviorsCallbackFunction(message, guid);
+    return AllowCKObjectMutation("CKBehavior::CallSubBehaviorsCallbackFunction")
+               ? self->CallSubBehaviorsCallbackFunction(message, guid)
+               : 0;
 }
 
 static int ExecuteCKBehavior(CKBehavior *self, float delta) {
-    return RejectCKObjectMutation("CKBehavior::Execute") ? 0 : self->Execute(delta);
+    return AllowCKObjectMutation("CKBehavior::Execute") ? self->Execute(delta) : 0;
 }
 
 static void SetCKBehaviorVersion(CKBehavior *self, CKDWORD version) {
-    if (!RejectCKObjectMutation("CKBehavior::SetVersion")) {
+    if (AllowCKObjectMutation("CKBehavior::SetVersion")) {
         self->SetVersion(version);
     }
 }
 
 static void ActivateCKBehaviorOutput(CKBehavior *self, int pos, bool active) {
-    if (!RejectCKObjectMutation("CKBehavior::ActivateOutput")) {
+    if (AllowCKObjectMutation("CKBehavior::ActivateOutput")) {
         self->ActivateOutput(pos, active);
     }
 }
 
 static void ActivateCKBehaviorInput(CKBehavior *self, int pos, bool active) {
-    if (!RejectCKObjectMutation("CKBehavior::ActivateInput")) {
+    if (AllowCKObjectMutation("CKBehavior::ActivateInput")) {
         self->ActivateInput(pos, active);
     }
 }
 
 static void EnableCKBehaviorInputParameter(CKBehavior *self, int pos, bool enable) {
-    if (!RejectCKObjectMutation("CKBehavior::EnableInputParameter")) {
+    if (AllowCKObjectMutation("CKBehavior::EnableInputParameter")) {
         self->EnableInputParameter(pos, enable);
     }
 }
 
 static NativePointer GetCKBehaviorOutputParameterWriteData(CKBehavior *self, int pos) {
-    return RejectCKObjectMutation("CKBehavior::GetOutputParameterWriteDataPtr")
-               ? NativePointer()
-               : NativePointer(self->GetOutputParameterWriteDataPtr(pos));
+    return AllowCKObjectMutation("CKBehavior::GetOutputParameterWriteDataPtr")
+               ? NativePointer(self->GetOutputParameterWriteDataPtr(pos))
+               : NativePointer();
 }
 
 static CKERROR SetCKBehaviorOutputParameterObject(CKBehavior *self, int pos, CKObject *object) {
-    return RejectCKObjectMutation("CKBehavior::SetOutputParameterObject")
-               ? CKERR_INVALIDOPERATION
-               : self->SetOutputParameterObject(pos, object);
+    return AllowCKObjectMutation("CKBehavior::SetOutputParameterObject")
+               ? self->SetOutputParameterObject(pos, object)
+               : CKERR_INVALIDOPERATION;
 }
 
 static void EnableCKBehaviorOutputParameter(CKBehavior *self, int pos, bool enable) {
-    if (!RejectCKObjectMutation("CKBehavior::EnableOutputParameter")) {
+    if (AllowCKObjectMutation("CKBehavior::EnableOutputParameter")) {
         self->EnableOutputParameter(pos, enable);
     }
 }
 
 static NativePointer GetCKBehaviorLocalParameterWriteData(CKBehavior *self, int pos) {
-    return RejectCKObjectMutation("CKBehavior::GetLocalParameterWriteDataPtr")
-               ? NativePointer()
-               : NativePointer(self->GetLocalParameterWriteDataPtr(pos));
+    return AllowCKObjectMutation("CKBehavior::GetLocalParameterWriteDataPtr")
+               ? NativePointer(self->GetLocalParameterWriteDataPtr(pos))
+               : NativePointer();
 }
 
 static CKERROR SetCKBehaviorLocalParameterObject(CKBehavior *self, int pos, CKObject *object) {
-    return RejectCKObjectMutation("CKBehavior::SetLocalParameterObject")
-               ? CKERR_INVALIDOPERATION
-               : self->SetLocalParameterObject(pos, object);
+    return AllowCKObjectMutation("CKBehavior::SetLocalParameterObject")
+               ? self->SetLocalParameterObject(pos, object)
+               : CKERR_INVALIDOPERATION;
 }
 
 static void ActivateCKBehavior(CKBehavior *self, bool active, bool reset) {
-    if (!RejectCKObjectMutation("CKBehavior::Activate")) {
+    if (AllowCKObjectMutation("CKBehavior::Activate")) {
         self->Activate(active, reset);
     }
 }
 
 static void SetCKBehaviorPriority(CKBehavior *self, int priority) {
-    if (!RejectCKObjectMutation("CKBehavior::SetPriority")) {
+    if (AllowCKObjectMutation("CKBehavior::SetPriority")) {
         self->SetPriority(priority);
     }
 }
@@ -4337,41 +4478,11 @@ static void InverseTransformManyCK3dEntity(const T *self, NativeBuffer *dest, Na
 }
 
 template <typename T>
-static bool SetCK3dEntityParent(T *self, CK3dEntity *parent, bool keepWorldPosition) {
-    return RejectCKObjectMutation("CK3dEntity::SetParent")
-               ? false
-               : self->SetParent(parent, keepWorldPosition);
-}
-
-template <typename T>
-static bool AddCK3dEntityChild(T *self, CK3dEntity *child, bool keepWorldPosition) {
-    return RejectCKObjectMutation("CK3dEntity::AddChild")
-               ? false
-               : self->AddChild(child, keepWorldPosition);
-}
-
-template <typename T>
-static bool AddCK3dEntityChildren(T *self,
-                                  const XObjectPointerArray &children,
-                                  bool keepWorldPosition) {
-    return RejectCKObjectMutation("CK3dEntity::AddChildren")
-               ? false
-               : self->AddChildren(children, keepWorldPosition);
-}
-
-template <typename T>
-static bool RemoveCK3dEntityChild(T *self, CK3dEntity *child) {
-    return RejectCKObjectMutation("CK3dEntity::RemoveChild")
-               ? false
-               : self->RemoveChild(child);
-}
-
-template <typename T>
 static void LookAtWithCK3dEntity(T *self,
                                  const VxVector &position,
                                  CK3dEntity *reference,
                                  bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::LookAt")) {
+    if (AllowCKObjectMutation("CK3dEntity::LookAt")) {
         self->LookAt(&position, reference, keepChildren);
     }
 }
@@ -4384,7 +4495,7 @@ static void RotateCK3dEntity(T *self,
                              float angle,
                              CK3dEntity *reference,
                              bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::Rotate")) {
+    if (AllowCKObjectMutation("CK3dEntity::Rotate")) {
         self->Rotate3f(x, y, z, angle, reference, keepChildren);
     }
 }
@@ -4395,7 +4506,7 @@ static void RotateCK3dEntityAroundAxis(T *self,
                                        float angle,
                                        CK3dEntity *reference,
                                        bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::Rotate")) {
+    if (AllowCKObjectMutation("CK3dEntity::Rotate")) {
         self->Rotate(&axis, angle, reference, keepChildren);
     }
 }
@@ -4407,7 +4518,7 @@ static void TranslateCK3dEntity(T *self,
                                 float z,
                                 CK3dEntity *reference,
                                 bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::Translate")) {
+    if (AllowCKObjectMutation("CK3dEntity::Translate")) {
         self->Translate3f(x, y, z, reference, keepChildren);
     }
 }
@@ -4417,7 +4528,7 @@ static void TranslateCK3dEntityByVector(T *self,
                                         const VxVector &translation,
                                         CK3dEntity *reference,
                                         bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::Translate")) {
+    if (AllowCKObjectMutation("CK3dEntity::Translate")) {
         self->Translate(&translation, reference, keepChildren);
     }
 }
@@ -4429,7 +4540,7 @@ static void AddCK3dEntityScale(T *self,
                                float z,
                                bool keepChildren,
                                bool local) {
-    if (!RejectCKObjectMutation("CK3dEntity::AddScale")) {
+    if (AllowCKObjectMutation("CK3dEntity::AddScale")) {
         self->AddScale3f(x, y, z, keepChildren, local);
     }
 }
@@ -4439,7 +4550,7 @@ static void AddCK3dEntityScaleVector(T *self,
                                      const VxVector &scale,
                                      bool keepChildren,
                                      bool local) {
-    if (!RejectCKObjectMutation("CK3dEntity::AddScale")) {
+    if (AllowCKObjectMutation("CK3dEntity::AddScale")) {
         self->AddScale(&scale, keepChildren, local);
     }
 }
@@ -4451,7 +4562,7 @@ static void SetCK3dEntityPosition(T *self,
                                   float z,
                                   CK3dEntity *reference,
                                   bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetPosition")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetPosition")) {
         self->SetPosition3f(x, y, z, reference, keepChildren);
     }
 }
@@ -4461,7 +4572,7 @@ static void SetCK3dEntityPositionVector(T *self,
                                         const VxVector &position,
                                         CK3dEntity *reference,
                                         bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetPosition")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetPosition")) {
         self->SetPosition(&position, reference, keepChildren);
     }
 }
@@ -4473,7 +4584,7 @@ static void SetCK3dEntityOrientation(T *self,
                                      const VxVector *right,
                                      CK3dEntity *reference,
                                      bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetOrientation")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetOrientation")) {
         self->SetOrientation(&direction, &up, right, reference, keepChildren);
     }
 }
@@ -4493,7 +4604,7 @@ static void SetCK3dEntityQuaternion(T *self,
                                     CK3dEntity *reference,
                                     bool keepChildren,
                                     bool keepScale) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetQuaternion")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetQuaternion")) {
         self->SetQuaternion(&quaternion, reference, keepChildren, keepScale);
     }
 }
@@ -4505,7 +4616,7 @@ static void SetCK3dEntityScale(T *self,
                                float z,
                                bool keepChildren,
                                bool local) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetScale")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetScale")) {
         self->SetScale3f(x, y, z, keepChildren, local);
     }
 }
@@ -4515,7 +4626,7 @@ static void SetCK3dEntityScaleVector(T *self,
                                      const VxVector &scale,
                                      bool keepChildren,
                                      bool local) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetScale")) {
+    if (AllowCKObjectMutation("CK3dEntity::SetScale")) {
         self->SetScale(&scale, keepChildren, local);
     }
 }
@@ -4525,9 +4636,9 @@ static bool ConstructCK3dEntityWorldMatrix(T *self,
                                             const VxVector &position,
                                             const VxVector &scale,
                                             const VxQuaternion &quaternion) {
-    return RejectCKObjectMutation("CK3dEntity::ConstructWorldMatrix")
-               ? false
-               : self->ConstructWorldMatrix(&position, &scale, &quaternion);
+    return AllowCKObjectMutation("CK3dEntity::ConstructWorldMatrix")
+               ? self->ConstructWorldMatrix(&position, &scale, &quaternion)
+               : false;
 }
 
 template <typename T>
@@ -4537,9 +4648,9 @@ static bool ConstructCK3dEntityWorldMatrixEx(T *self,
                                               const VxQuaternion &quaternion,
                                               const VxQuaternion &shear,
                                               float sign) {
-    return RejectCKObjectMutation("CK3dEntity::ConstructWorldMatrixEx")
-               ? false
-               : self->ConstructWorldMatrixEx(&position, &scale, &quaternion, &shear, sign);
+    return AllowCKObjectMutation("CK3dEntity::ConstructWorldMatrixEx")
+               ? self->ConstructWorldMatrixEx(&position, &scale, &quaternion, &shear, sign)
+               : false;
 }
 
 template <typename T>
@@ -4547,9 +4658,9 @@ static bool ConstructCK3dEntityLocalMatrix(T *self,
                                             const VxVector &position,
                                             const VxVector &scale,
                                             const VxQuaternion &quaternion) {
-    return RejectCKObjectMutation("CK3dEntity::ConstructLocalMatrix")
-               ? false
-               : self->ConstructLocalMatrix(&position, &scale, &quaternion);
+    return AllowCKObjectMutation("CK3dEntity::ConstructLocalMatrix")
+               ? self->ConstructLocalMatrix(&position, &scale, &quaternion)
+               : false;
 }
 
 template <typename T>
@@ -4559,31 +4670,11 @@ static bool ConstructCK3dEntityLocalMatrixEx(T *self,
                                               const VxQuaternion &quaternion,
                                               const VxQuaternion &shear,
                                               float sign) {
-    return RejectCKObjectMutation("CK3dEntity::ConstructLocalMatrixEx")
-               ? false
-               : self->ConstructLocalMatrixEx(&position, &scale, &quaternion, &shear, sign);
+    return AllowCKObjectMutation("CK3dEntity::ConstructLocalMatrixEx")
+               ? self->ConstructLocalMatrixEx(&position, &scale, &quaternion, &shear, sign)
+               : false;
 }
 
-template <typename T>
-static void SetCK3dEntityLocalMatrix(T *self, const VxMatrix &matrix, bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetLocalMatrix")) {
-        self->SetLocalMatrix(matrix, keepChildren);
-    }
-}
-
-template <typename T>
-static void SetCK3dEntityWorldMatrix(T *self, const VxMatrix &matrix, bool keepChildren) {
-    if (!RejectCKObjectMutation("CK3dEntity::SetWorldMatrix")) {
-        self->SetWorldMatrix(matrix, keepChildren);
-    }
-}
-
-template <typename T>
-static void ChangeCK3dEntityReferential(T *self, CK3dEntity *reference) {
-    if (!RejectCKObjectMutation("CK3dEntity::ChangeReferential")) {
-        self->ChangeReferential(reference);
-    }
-}
 
 template <typename T>
 void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
@@ -4596,48 +4687,94 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "int GetChildrenCount() const", asMETHODPR(T, GetChildrenCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetChild(int pos) const", asMETHODPR(T, GetChild, (int) const, CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)", asFUNCTIONPR(SetCK3dEntityParent<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, CK3dEntity *, bool>(
+        engine, name, "bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)", "CK3dEntity::SetParent",
+        [](T *self, CK3dEntity *parent, bool keepWorldPosition) -> bool {
+            return self->SetParent(parent, keepWorldPosition) != FALSE;
+        },
+        false); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetParent() const", asFUNCTIONPR([](T *self) -> CK3dEntity * { return self->GetParent(); }, (T *), CK3dEntity *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", asFUNCTIONPR(AddCK3dEntityChild<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool AddChildren(const XObjectPointerArray &in children, bool keepWorldPos = true)", asFUNCTIONPR(AddCK3dEntityChildren<T>, (T *, const XObjectPointerArray &, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool RemoveChild(CK3dEntity@ mov)", asFUNCTIONPR(RemoveCK3dEntityChild<T>, (T *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, CK3dEntity *, bool>(
+        engine, name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", "CK3dEntity::AddChild",
+        [](T *self, CK3dEntity *child, bool keepWorldPosition) -> bool {
+            return self->AddChild(child, keepWorldPosition) != FALSE;
+        },
+        false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, const XObjectPointerArray &, bool>(
+        engine, name, "bool AddChildren(const XObjectPointerArray &in children, bool keepWorldPos = true)", "CK3dEntity::AddChildren",
+        [](T *self, const XObjectPointerArray &children, bool keepWorldPosition) -> bool {
+            return self->AddChildren(children, keepWorldPosition) != FALSE;
+        },
+        false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, CK3dEntity *>(
+        engine, name, "bool RemoveChild(CK3dEntity@ mov)", "CK3dEntity::RemoveChild",
+        [](T *self, CK3dEntity *child) -> bool {
+            return self->RemoveChild(child) != FALSE;
+        },
+        false); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const", asFUNCTIONPR([](T *self, CK3dEntity *mov, bool sameOrder) -> bool { return self->CheckIfSameKindOfHierarchy(mov, sameOrder); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ HierarchyParser(CK3dEntity@ current) const", asMETHODPR(T, HierarchyParser, (CK3dEntity *) const, CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKDWORD GetFlags() const", asMETHODPR(T, GetFlags, () const, CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetFlags(CKDWORD flags)", asMETHODPR(T, SetFlags, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, CKDWORD>(
+        engine, name, "void SetFlags(CKDWORD flags)", "CK3dEntity::SetFlags",
+        [](T *self, CKDWORD flags) { self->SetFlags(flags); }); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetPickable(bool pick = true)", asFUNCTIONPR([](T *self, bool pick) { self->SetPickable(pick); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, bool>(
+        engine, name, "void SetPickable(bool pick = true)", "CK3dEntity::SetPickable",
+        [](T *self, bool pickable) { self->SetPickable(pickable); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsPickable() const", asFUNCTIONPR([](const T *self) -> bool { return self->IsPickable(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION != 0x26052005
-    r = engine->RegisterObjectMethod(name, "void SetRenderChannels(bool renderChannels = true)", asFUNCTIONPR([](T *self, bool renderChannels) { self->SetRenderChannels(renderChannels); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, bool>(
+        engine, name, "void SetRenderChannels(bool renderChannels = true)", "CK3dEntity::SetRenderChannels",
+        [](T *self, bool visible) { self->SetRenderChannels(visible); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool AreRenderChannelsVisible() const", asFUNCTIONPR([](const T *self) -> bool { return self->AreRenderChannelsVisible(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
     r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrum(CKRenderContext@ dev, CKDWORD flags = 0)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->IsInViewFrustrum(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrumHierarchic(CKRenderContext@ Dev)", asFUNCTIONPR([](T *self, CKRenderContext *Dev) -> bool { return self->IsInViewFrustrumHierarchic(Dev); }, (T *, CKRenderContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void IgnoreAnimations(bool ignore = true)", asFUNCTIONPR([](T *self, bool ignore) { self->IgnoreAnimations(ignore); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, bool>(
+        engine, name, "void IgnoreAnimations(bool ignore = true)", "CK3dEntity::IgnoreAnimations",
+        [](T *self, bool ignore) { self->IgnoreAnimations(ignore); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool AreAnimationIgnored() const", asFUNCTIONPR([](const T *self) -> bool { return self->AreAnimationIgnored(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool IsAllInsideFrustrum() const", asFUNCTIONPR([](const T *self) -> bool { return self->IsAllInsideFrustrum(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsAllOutsideFrustrum() const", asFUNCTIONPR([](const T *self) -> bool { return self->IsAllOutsideFrustrum(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetRenderAsTransparent(bool trans = true)", asFUNCTIONPR([](T *self, bool trans) { self->SetRenderAsTransparent(trans); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, bool>(
+        engine, name, "void SetRenderAsTransparent(bool trans = true)", "CK3dEntity::SetRenderAsTransparent",
+        [](T *self, bool transparent) { self->SetRenderAsTransparent(transparent); }); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKDWORD GetMoveableFlags() const", asMETHODPR(T, GetMoveableFlags, () const, CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetMoveableFlags(CKDWORD flags)", asMETHODPR(T, SetMoveableFlags, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, CKDWORD>(
+        engine, name, "void SetMoveableFlags(CKDWORD flags)", "CK3dEntity::SetMoveableFlags",
+        [](T *self, CKDWORD flags) { self->SetMoveableFlags(flags); }); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "CKDWORD ModifyMoveableFlags(CKDWORD add, CKDWORD remove)", asMETHODPR(T, ModifyMoveableFlags, (CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, CKDWORD, CKDWORD, CKDWORD>(
+        engine, name, "CKDWORD ModifyMoveableFlags(CKDWORD add, CKDWORD remove)", "CK3dEntity::ModifyMoveableFlags",
+        [](T *self, CKDWORD add, CKDWORD remove) { return self->ModifyMoveableFlags(add, remove); },
+        [](T *self) { return self->GetMoveableFlags(); }); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKMesh@ GetCurrentMesh() const", asMETHODPR(T, GetCurrentMesh, () const, CKMesh*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKMesh@ SetCurrentMesh(CKMesh@ m, bool addIfNotHere = true)", asFUNCTIONPR([](T *self, CKMesh *m, bool addIfNotHere) -> CKMesh* { return self->SetCurrentMesh(m, addIfNotHere); }, (T *, CKMesh *, bool), CKMesh *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, CKMesh *, CKMesh *, bool>(
+        engine, name, "CKMesh@ SetCurrentMesh(CKMesh@ m, bool addIfNotHere = true)", "CK3dEntity::SetCurrentMesh",
+        [](T *self, CKMesh *mesh, bool addIfMissing) {
+            return self->SetCurrentMesh(mesh, addIfMissing);
+        },
+        static_cast<CKMesh *>(nullptr)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetMeshCount() const", asMETHODPR(T, GetMeshCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKMesh@ GetMesh(int pos) const", asMETHODPR(T, GetMesh, (int) const, CKMesh*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR AddMesh(CKMesh@ mesh)", asMETHODPR(T, AddMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR RemoveMesh(CKMesh@ mesh)", asMETHODPR(T, RemoveMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, CKERROR, CKMesh *>(
+        engine, name, "CKERROR AddMesh(CKMesh@ mesh)", "CK3dEntity::AddMesh",
+        [](T *self, CKMesh *mesh) { return self->AddMesh(mesh); },
+        CKERR_INVALIDOPERATION); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, CKERROR, CKMesh *>(
+        engine, name, "CKERROR RemoveMesh(CKMesh@ mesh)", "CK3dEntity::RemoveMesh",
+        [](T *self, CKMesh *mesh) { return self->RemoveMesh(mesh); },
+        CKERR_INVALIDOPERATION); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void LookAt(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR(LookAtWithCK3dEntity<T>, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -4670,16 +4807,29 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR(ConstructCK3dEntityLocalMatrix<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR(ConstructCK3dEntityLocalMatrixEx<T>, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->Render(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, CKRenderContext *, CKDWORD>(
+        engine, name, "bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)", "CK3dEntity::Render",
+        [](T *self, CKRenderContext *renderContext, CKDWORD flags) -> bool {
+            return self->Render(renderContext, flags) != FALSE;
+        },
+        false); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int RayIntersection(const VxVector &in pos1, const VxVector &in pos2, VxIntersectionDesc &out desc, CK3dEntity@ ref, CK_RAYINTERSECTION options = CKRAYINTERSECTION_DEFAULT)", asMETHODPR(T, RayIntersection, (const VxVector *, const VxVector *, VxIntersectionDesc *, CK3dEntity *, CK_RAYINTERSECTION), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetRenderExtents(VxRect &out rect) const", asMETHODPR(T, GetRenderExtents, (VxRect&) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetLastFrameMatrix() const", asMETHODPR(T, GetLastFrameMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void SetLocalMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR(SetCK3dEntityLocalMatrix<T>, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, const VxMatrix &, bool>(
+        engine, name, "void SetLocalMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", "CK3dEntity::SetLocalMatrix",
+        [](T *self, const VxMatrix &matrix, bool keepChildren) {
+            self->SetLocalMatrix(matrix, keepChildren);
+        }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetLocalMatrix() const", asMETHODPR(T, GetLocalMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetWorldMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", asFUNCTIONPR(SetCK3dEntityWorldMatrix<T>, (T *, const VxMatrix &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, const VxMatrix &, bool>(
+        engine, name, "void SetWorldMatrix(const VxMatrix &in Mat, bool KeepChildren = false)", "CK3dEntity::SetWorldMatrix",
+        [](T *self, const VxMatrix &matrix, bool keepChildren) {
+            self->SetWorldMatrix(matrix, keepChildren);
+        }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetWorldMatrix() const", asMETHODPR(T, GetWorldMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxMatrix &GetInverseWorldMatrix() const", asMETHODPR(T, GetInverseWorldMatrix, () const, const VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -4689,23 +4839,43 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void InverseTransformVector(VxVector &out dest, const VxVector &in src, CK3dEntity@ ref = null) const", asMETHODPR(T, InverseTransformVector, (VxVector *, const VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(TransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(InverseTransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ChangeReferential(CK3dEntity@ ref = null)", asFUNCTIONPR(ChangeCK3dEntityReferential<T>, (T *, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, CK3dEntity *>(
+        engine, name, "void ChangeReferential(CK3dEntity@ ref = null)", "CK3dEntity::ChangeReferential",
+        [](T *self, CK3dEntity *reference) { self->ChangeReferential(reference); }); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKPlace@ GetReferencePlace() const", asMETHODPR(T, GetReferencePlace, () const, CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void AddObjectAnimation(CKObjectAnimation@ anim)", asMETHODPR(T, AddObjectAnimation, (CKObjectAnimation *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void RemoveObjectAnimation(CKObjectAnimation@ anim)", asMETHODPR(T, RemoveObjectAnimation, (CKObjectAnimation *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, CKObjectAnimation *>(
+        engine, name, "void AddObjectAnimation(CKObjectAnimation@ anim)", "CK3dEntity::AddObjectAnimation",
+        [](T *self, CKObjectAnimation *animation) { self->AddObjectAnimation(animation); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, CKObjectAnimation *>(
+        engine, name, "void RemoveObjectAnimation(CKObjectAnimation@ anim)", "CK3dEntity::RemoveObjectAnimation",
+        [](T *self, CKObjectAnimation *animation) { self->RemoveObjectAnimation(animation); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObjectAnimation@ GetObjectAnimation(int index) const", asMETHODPR(T, GetObjectAnimation, (int) const, CKObjectAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetObjectAnimationCount() const", asMETHODPR(T, GetObjectAnimationCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "CKSkin@ CreateSkin()", asMETHODPR(T, CreateSkin, (), CKSkin *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool DestroySkin()", asFUNCTIONPR([](T *self) -> bool { return self->DestroySkin(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool UpdateSkin()", asFUNCTIONPR([](T *self) -> bool { return self->UpdateSkin(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, CKSkin *>(
+        engine, name, "CKSkin@ CreateSkin()", "CK3dEntity::CreateSkin",
+        [](T *self) { return self->CreateSkin(); },
+        static_cast<CKSkin *>(nullptr)); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool>(
+        engine, name, "bool DestroySkin()", "CK3dEntity::DestroySkin",
+        [](T *self) -> bool { return self->DestroySkin() != FALSE; },
+        false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool>(
+        engine, name, "bool UpdateSkin()", "CK3dEntity::UpdateSkin",
+        [](T *self) -> bool { return self->UpdateSkin() != FALSE; },
+        false); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKSkin@ GetSkin() const", asMETHODPR(T, GetSkin, () const, CKSkin *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void UpdateBox(bool world = true)", asFUNCTIONPR([](T *self, bool world) { self->UpdateBox(world); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<T, bool>(
+        engine, name, "void UpdateBox(bool world = true)", "CK3dEntity::UpdateBox",
+        [](T *self, bool world) { self->UpdateBox(world); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxBbox &GetBoundingBox(bool local = false)", asFUNCTIONPR([](T *self, bool local) -> const VxBbox& { return self->GetBoundingBox(local); }, (T *, bool), const VxBbox &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool SetBoundingBox(const VxBbox &in bbox, bool local = false)", asFUNCTIONPR([](T *self, const VxBbox &bbox, bool local) -> bool { return self->SetBoundingBox(&bbox, local); }, (T *, const VxBbox &, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<T, bool, const VxBbox &, bool>(
+        engine, name, "bool SetBoundingBox(const VxBbox &in bbox, bool local = false)", "CK3dEntity::SetBoundingBox",
+        [](T *self, const VxBbox &box, bool local) -> bool { return self->SetBoundingBox(&box, local) != FALSE; },
+        false); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "const VxBbox &GetHierarchicalBox(bool local = false)", asFUNCTIONPR([](T *self, bool local) -> const VxBbox& { return self->GetHierarchicalBox(local); }, (T *, bool), const VxBbox&), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool GetBaryCenter(VxVector&out Pos)", asFUNCTIONPR([](T *self, VxVector &Pos) -> bool { return self->GetBaryCenter(&Pos); }, (T *, VxVector &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 

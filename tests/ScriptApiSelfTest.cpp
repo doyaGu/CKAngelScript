@@ -5177,6 +5177,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  void SetNativeParameter() { CKParameter@ p = cast<CKParameter@>(GetCKContext(0).GetObjectByName(\"__CKAS_ParameterMutationProbe\")); p.SetStringValue(\"after\"); }\n"
         "  void ActivateNativeBehavior() { CKBehavior@ b = cast<CKBehavior@>(GetCKContext(0).GetObjectByName(\"__CKAS_BehaviorMutationProbe\")); b.Activate(true, false); }\n"
         "  void MoveNativeEntity() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityMutationProbe\")); e.SetPosition(4.0f, 5.0f, 6.0f); }\n"
+        "  void MakeNativeEntityUnpickable() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityStateProbe\")); e.SetPickable(false); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -6061,6 +6062,60 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !entityPositionUnchanged ||
         !entityMutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CK3dEntity movement to preserve its transform.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void MakeNativeEntityUnpickable()";
+    CKAngelScriptMethod *makeNativeEntityUnpickableMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &makeNativeEntityUnpickableMethod, &result) != CKAS_OK ||
+        !makeNativeEntityUnpickableMethod) {
+        error = "CKAngelScript API self-test failed to find MakeNativeEntityUnpickable object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *entityStateProbeName = "__CKAS_EntityStateProbe";
+    CK3dEntity *entityStateProbe = CK3dEntity::Cast(
+        context->CreateObject(CKCID_3DOBJECT,
+                              const_cast<CKSTRING>(entityStateProbeName),
+                              CK_OBJECTCREATION_DYNAMIC));
+    if (!entityStateProbe) {
+        error = "CKAngelScript API self-test could not initialize the CK3dEntity state probe.";
+        api->ReleaseMethod(makeNativeEntityUnpickableMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    entityStateProbe->SetPickable(true);
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CK3dEntity state mutation filter.";
+        context->DestroyObject(entityStateProbe);
+        api->ReleaseMethod(makeNativeEntityUnpickableMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = makeNativeEntityUnpickableMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedEntityStateStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedEntityStateError = result.ErrorMessage ? result.ErrorMessage : "";
+    const bool entityRemainsPickable = entityStateProbe->IsPickable();
+    const bool entityStateMutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(entityStateProbe);
+    api->ReleaseMethod(makeNativeEntityUnpickableMethod);
+    if (rejectedEntityStateStatus != CKAS_EXECUTIONFAILED ||
+        rejectedEntityStateError.find("CK3dEntity::SetPickable is not available in the current script host phase") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CK3dEntity::SetPickable") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        !entityRemainsPickable ||
+        !entityStateMutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CK3dEntity state mutation to preserve pickability.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;
