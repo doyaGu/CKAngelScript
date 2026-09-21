@@ -87,6 +87,9 @@ asIScriptContext *ScriptEngineHost::RequestContext(ScriptManager &manager) {
         return nullptr;
     }
 
+    if (ScriptAsyncScheduler *scheduler = manager.GetAsyncScheduler()) {
+        scheduler->ForgetContext(ctx);
+    }
     const int state = ctx->GetState();
     if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
         ctx->Abort();
@@ -96,11 +99,14 @@ asIScriptContext *ScriptEngineHost::RequestContext(ScriptManager &manager) {
     return ctx;
 }
 
-void ScriptEngineHost::ReturnContext(ScriptManager &, asIScriptContext *context) {
+void ScriptEngineHost::ReturnContext(ScriptManager &manager, asIScriptContext *context) {
     if (!context) {
         return;
     }
 
+    if (ScriptAsyncScheduler *scheduler = manager.GetAsyncScheduler()) {
+        scheduler->ForgetContext(context);
+    }
     const int state = context->GetState();
     if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
         context->Abort();

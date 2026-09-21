@@ -26,12 +26,15 @@
 
 namespace {
 
-void ClearRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler *asyncScheduler) {
+void ClearRuntimeQueues(ScriptMessageBus *messageBus,
+                        ScriptAsyncScheduler *asyncScheduler,
+                        const char *asyncReason) {
     if (messageBus) {
         messageBus->Clear();
     }
     if (asyncScheduler) {
-        asyncScheduler->Clear();
+        asyncScheduler->Clear(asyncReason ? asyncReason
+                                          : "Async task was cancelled because the scheduler shut down.");
     }
 }
 
@@ -79,7 +82,9 @@ void ScriptManager::ClearObjectBoundRuntime() {
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
-    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
+    ClearRuntimeQueues(m_MessageBus.get(),
+                       m_AsyncScheduler.get(),
+                       "Async task was cancelled because CK objects are being cleared.");
     ClearCKObjectData();
 }
 
@@ -154,7 +159,9 @@ CKERROR ScriptManager::OnCKEnd() {
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
-    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
+    ClearRuntimeQueues(m_MessageBus.get(),
+                       m_AsyncScheduler.get(),
+                       "Async task was cancelled because CK is ending.");
 #if CKAS_BUILD_SELF_TESTS
     return CompleteScriptManagerLifecycleSelfTest(this);
 #else
@@ -312,6 +319,9 @@ int ScriptManager::Shutdown() {
     m_ResetOrphanCleanupPending = false;
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because the script manager is shutting down.");
     m_HandleRegistry.Clear();
+    if (m_MessageBus) {
+        m_MessageBus->CancelPendingWork("Message work was cancelled because the script manager is shutting down.");
+    }
 
     ClearExecutorStates();
     ClearComponentStates();
@@ -321,7 +331,9 @@ int ScriptManager::Shutdown() {
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
-    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
+    ClearRuntimeQueues(m_MessageBus.get(),
+                       m_AsyncScheduler.get(),
+                       "Async task was cancelled because the script manager is shutting down.");
 
     m_EngineHost.ReleaseContextPool();
 

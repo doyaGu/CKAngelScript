@@ -1809,8 +1809,17 @@ bool ScriptAsyncScheduler::WaitForTask(asIScriptContext *context,
 ScriptAsyncScheduler::ResumeState ScriptAsyncScheduler::PrepareContextResume(asIScriptContext *context, std::string &error) {
     auto it = m_Waits.find(context);
     if (it == m_Waits.end()) {
+        if (context && m_RejectedResumes.erase(context)) {
+            error = "Awaited async task was cancelled because the scheduler shut down.";
+            return ResumeState::Failed;
+        }
+        if (context && context->GetState() == asEXECUTION_ABORTED) {
+            error = "Awaited async task was cancelled because the scheduler shut down.";
+            return ResumeState::Failed;
+        }
         return ResumeState::Ready;
     }
+    m_RejectedResumes.erase(context);
 
     WaitRecord &record = it->second;
     ScriptAsyncTaskBase *task = record.Task;
@@ -1841,6 +1850,9 @@ ScriptAsyncScheduler::ResumeState ScriptAsyncScheduler::PrepareContextResume(asI
 }
 
 void ScriptAsyncScheduler::ForgetContext(asIScriptContext *context) {
+    if (context) {
+        m_RejectedResumes.erase(context);
+    }
     auto it = m_Waits.find(context);
     if (it == m_Waits.end()) {
         return;
@@ -1945,24 +1957,37 @@ void ScriptAsyncScheduler::CancelAll(const std::string &reason) {
     }
 }
 
+void ScriptAsyncScheduler::Shutdown(const std::string &reason) {
+    const std::string shutdownReason = reason.empty()
+        ? "Async task was cancelled because the scheduler shut down."
+        : reason;
+    CancelAll(shutdownReason);
+    for (auto &entry : m_Waits) {
+        if (!entry.first) {
+            continue;
+        }
+        const int state = entry.first->GetState();
+        if (state == asEXECUTION_ACTIVE ||
+            state == asEXECUTION_SUSPENDED ||
+            state == asEXECUTION_PREPARED) {
+            entry.first->Abort();
+        }
+        m_RejectedResumes.insert(entry.first);
+    }
+    m_ActiveOwners.clear();
+}
+
 void ScriptAsyncScheduler::Clear() {
-    asIScriptEngine *engine = GetEngine();
+    Clear("Async scheduler was cleared.");
+}
+
+void ScriptAsyncScheduler::Clear(const std::string &reason) {
+    Shutdown(reason);
     std::unordered_map<asIScriptContext *, WaitRecord> waits;
     waits.swap(m_Waits);
     for (auto &entry : waits) {
         ReleaseWaitRecord(entry.second);
     }
-
-    std::vector<ScriptAsyncTaskBase *> tasks;
-    tasks.swap(m_Tasks);
-    for (ScriptAsyncTaskBase *task : tasks) {
-        if (task) {
-            task->Cancel();
-            task->ReleaseAllReferences(engine);
-            task->Release();
-        }
-    }
-    m_ActiveOwners.clear();
 }
 
 void ScriptAsyncScheduler::ReleaseWaitRecord(WaitRecord &record) {

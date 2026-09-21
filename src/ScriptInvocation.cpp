@@ -134,9 +134,13 @@ ScriptInvocationStatus ScriptInvocationContext::Resume(const ScriptInvocationSpe
 
     std::string waitError;
     ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
-    const ScriptAsyncScheduler::ResumeState state = scheduler
-        ? scheduler->PrepareContextResume(m_Context, waitError)
-        : ScriptAsyncScheduler::ResumeState::Ready;
+    if (!scheduler) {
+        return Fail(asEXECUTION_ABORTED,
+                    "Awaited async task was cancelled because the scheduler shut down.",
+                    true);
+    }
+    const ScriptAsyncScheduler::ResumeState state =
+        scheduler->PrepareContextResume(m_Context, waitError);
     if (state == ScriptAsyncScheduler::ResumeState::Pending) {
         m_LastResultCode = asEXECUTION_SUSPENDED;
         return ScriptInvocationStatus::Suspended;

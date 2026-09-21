@@ -222,7 +222,9 @@ public:
     void ForgetContext(asIScriptContext *context);
     bool HasTaskForModule(const char *moduleName) const;
     void CancelAll(const std::string &reason);
+    void Shutdown(const std::string &reason);
     void Clear();
+    void Clear(const std::string &reason);
 
 private:
     struct WaitRecord {
@@ -240,6 +242,7 @@ private:
     bool m_ProcessingPaused = false;
     std::vector<ScriptAsyncTaskBase *> m_Tasks;
     std::unordered_map<asIScriptContext *, WaitRecord> m_Waits;
+    std::unordered_set<asIScriptContext *> m_RejectedResumes;
     std::unordered_map<asIScriptContext *, ScriptAsyncOwnerId> m_ActiveOwners;
 };
 

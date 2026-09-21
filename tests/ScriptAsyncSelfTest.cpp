@@ -420,6 +420,76 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
     cleanupCancelledWait();
 
+    WriteAsyncSelfTestStage("shutdown-does-not-succeed-await");
+    asIScriptContext *shutdownWaitContext = engine->RequestContext();
+    if (!shutdownWaitContext) {
+        error = "Async shutdown resume self-test could not request a script context.";
+        return false;
+    }
+    ScriptAsyncTaskBase *shutdownTask = scheduler.CreateDelay(20);
+    auto cleanupShutdownWait = [&]() {
+        scheduler.ForgetContext(shutdownWaitContext);
+        if (shutdownTask) {
+            shutdownTask->Release();
+            shutdownTask = nullptr;
+        }
+        engine->ReturnContext(shutdownWaitContext);
+    };
+    waitError.clear();
+    if (!shutdownTask ||
+        !scheduler.WaitForTask(shutdownWaitContext, shutdownTask, nullptr, asTYPEID_VOID, waitError)) {
+        cleanupShutdownWait();
+        error = waitError.empty()
+            ? "Async shutdown resume self-test could not register await."
+            : waitError;
+        return false;
+    }
+    const std::string shutdownReason = "Async wait cancelled by scheduler shutdown.";
+    scheduler.Shutdown(shutdownReason);
+    waitError.clear();
+    if (scheduler.PrepareContextResume(shutdownWaitContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Failed ||
+        waitError != shutdownReason) {
+        cleanupShutdownWait();
+        error = "Async shutdown resume self-test expected the waiter to observe cancellation, not success.";
+        return false;
+    }
+    cleanupShutdownWait();
+
+    WriteAsyncSelfTestStage("clear-does-not-succeed-await");
+    asIScriptContext *clearedWaitContext = engine->RequestContext();
+    if (!clearedWaitContext) {
+        error = "Async clear resume self-test could not request a script context.";
+        return false;
+    }
+    ScriptAsyncTaskBase *clearedTask = scheduler.CreateDelay(20);
+    auto cleanupClearedWait = [&]() {
+        scheduler.ForgetContext(clearedWaitContext);
+        if (clearedTask) {
+            clearedTask->Release();
+            clearedTask = nullptr;
+        }
+        engine->ReturnContext(clearedWaitContext);
+    };
+    waitError.clear();
+    if (!clearedTask ||
+        !scheduler.WaitForTask(clearedWaitContext, clearedTask, nullptr, asTYPEID_VOID, waitError)) {
+        cleanupClearedWait();
+        error = waitError.empty()
+            ? "Async clear resume self-test could not register await."
+            : waitError;
+        return false;
+    }
+    scheduler.Clear();
+    waitError.clear();
+    if (scheduler.PrepareContextResume(clearedWaitContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Failed) {
+        cleanupClearedWait();
+        error = "Async clear resume self-test expected a dropped await to fail, not succeed.";
+        return false;
+    }
+    cleanupClearedWait();
+
     WriteAsyncSelfTestStage("owner-scoped-cancellation");
     constexpr const char *ownerModuleName = "__CKAS_AsyncOwnerCancellationSelfTest";
     if (api->CompileModule(ownerModuleName,
