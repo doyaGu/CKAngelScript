@@ -3,6 +3,11 @@
 
 #include <angelscript.h>
 
+class CKObject;
+
+void DetachScriptCKCallbacks(CKObject *object, asIScriptFunction *func);
+void ResetScriptCKSetRenderCallback(CKObject *object);
+
 void RegisterCKObject(asIScriptEngine *engine);
 void RegisterCKInterfaceObjectManager(asIScriptEngine *engine);
 void RegisterCKParameterIn(asIScriptEngine *engine);

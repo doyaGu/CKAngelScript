@@ -11,6 +11,7 @@
 #include "CKParameterOperation.h"
 #include "CKParameterManager.h"
 #include "ScriptHostScope.h"
+#include "ScriptManager.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
 
@@ -8213,6 +8214,118 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
     return ok;
 }
 
+bool RunCKCallbackTeardownSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CK callback teardown self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    if (!manager) {
+        error = "CK callback teardown self-test could not retrieve ScriptManager.";
+        return false;
+    }
+
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH,
+        const_cast<CKSTRING>("__CKAS_CallbackTeardownMesh"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!mesh) {
+        error = "CK callback teardown self-test could not create a mesh.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKCallbackTeardownSelfTest";
+    const char *source =
+        "void CKAS_MeshCallback(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object) {\n"
+        "}\n"
+        "int AddCKMeshCallback(CKMesh@ mesh) {\n"
+        "  if (mesh is null) return 1;\n"
+        "  if (!mesh.AddPreRenderCallBack(CKAS_MeshCallback)) return 2;\n"
+        "  return 0;\n"
+        "}\n"
+        "int RemoveCKMeshCallback(CKMesh@ mesh) {\n"
+        "  if (mesh is null) return 1;\n"
+        "  if (mesh.RemovePreRenderCallBack(CKAS_MeshCallback)) return 2;\n"
+        "  return 0;\n"
+        "}\n";
+
+    auto cleanup = [&]() {
+        engine->DiscardModule(moduleName);
+        if (mesh && !mesh->IsToBeDeleted()) {
+            context->DestroyObject(mesh);
+        }
+    };
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        cleanup();
+        error = "CK callback teardown self-test could not create a script module.";
+        return false;
+    }
+    if (module->AddScriptSection("ck-callback-teardown-self-test", source) < 0 ||
+        module->Build() < 0) {
+        cleanup();
+        error = "CK callback teardown self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *addCallback = module->GetFunctionByDecl("int AddCKMeshCallback(CKMesh@)");
+    asIScriptFunction *removeCallback = module->GetFunctionByDecl("int RemoveCKMeshCallback(CKMesh@)");
+    if (!addCallback || !removeCallback) {
+        cleanup();
+        error = "CK callback teardown self-test functions were not found.";
+        return false;
+    }
+
+    auto executeMeshProbe = [&](asIScriptFunction *function, const char *label) {
+        asIScriptContext *scriptContext = engine->RequestContext();
+        if (!scriptContext) {
+            error = std::string(label) + " could not create an execution context.";
+            return false;
+        }
+        int r = scriptContext->Prepare(function);
+        if (r >= 0) {
+            r = scriptContext->SetArgObject(0, mesh);
+        }
+        if (r >= 0) {
+            r = scriptContext->Execute();
+        }
+        bool ok = false;
+        if (r == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+            ok = returnCode == 0;
+            if (!ok) {
+                error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+            }
+        } else if (r == asEXECUTION_EXCEPTION) {
+            const char *exception = scriptContext->GetExceptionString();
+            error = std::string(label) + " exception: " +
+                    (exception && exception[0] ? exception : "<empty>") + ".";
+        } else {
+            error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+        }
+        scriptContext->Unprepare();
+        engine->ReturnContext(scriptContext);
+        return ok;
+    };
+
+    if (!executeMeshProbe(addCallback, "CK callback teardown add probe")) {
+        cleanup();
+        return false;
+    }
+
+    manager->ClearCKObjectData();
+
+    if (!executeMeshProbe(removeCallback, "CK callback teardown remove probe")) {
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
 bool RunCKRenderObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKRenderObject script self-test requires CKContext and AngelScript engine.";
@@ -15539,6 +15652,10 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     }
     WriteParameterRegistrySelfTestStage("CKRenderContext");
     if (!RunCKRenderContextScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    WriteParameterRegistrySelfTestStage("CKCallbackTeardown");
+    if (!RunCKCallbackTeardownSelfTest(context, engine, error)) {
         return false;
     }
     WriteParameterRegistrySelfTestStage("CKRenderObject");

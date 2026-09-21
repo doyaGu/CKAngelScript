@@ -3577,6 +3577,47 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
     return result;
 }
 
+void DetachScriptCKCallbacks(CKObject *object, asIScriptFunction *func) {
+    if (!object || !func) {
+        return;
+    }
+
+    if (CKRenderContext *renderContext = CKRenderContext::Cast(object)) {
+        renderContext->RemovePreRenderCallBack(CKRenderContext_RenderCallback, func);
+        renderContext->RemovePostRenderCallBack(CKRenderContext_RenderCallback, func);
+        renderContext->RemovePostSpriteRenderCallBack(CKRenderContext_RenderCallback, func);
+        return;
+    }
+
+    if (CKMesh *mesh = CKMesh::Cast(object)) {
+        mesh->RemovePreRenderCallBack(CKMesh_MeshRenderCallback, func);
+        mesh->RemovePostRenderCallBack(CKMesh_MeshRenderCallback, func);
+        mesh->RemoveSubMeshPreRenderCallBack(CKMesh_SubMeshRenderCallback, func);
+        mesh->RemoveSubMeshPostRenderCallBack(CKMesh_SubMeshRenderCallback, func);
+        return;
+    }
+
+    if (CKRenderObject *renderObject = CKRenderObject::Cast(object)) {
+        renderObject->RemovePreRenderCallBack(CKRenderObject_Callback, func);
+        renderObject->RemovePostRenderCallBack(CKRenderObject_Callback, func);
+    }
+}
+
+void ResetScriptCKSetRenderCallback(CKObject *object) {
+    if (!object) {
+        return;
+    }
+
+    if (CKMesh *mesh = CKMesh::Cast(object)) {
+        mesh->SetDefaultRenderCallBack();
+        return;
+    }
+
+    if (CKRenderObject *renderObject = CKRenderObject::Cast(object)) {
+        renderObject->RemoveRenderCallBack();
+    }
+}
+
 template <typename T>
 static void RegisterCKRenderObjectMembers(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);

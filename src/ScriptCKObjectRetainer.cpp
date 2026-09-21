@@ -1,6 +1,45 @@
 #include "ScriptCKObjectRetainer.h"
 
+#include <unordered_set>
+
+#include "ScriptCKObjects.h"
 #include "ScriptUtils.h"
+
+#undef GetObject
+
+void ScriptCKObjectRetainer::DetachFromLiveObjects(CKContext *context) {
+    if (!context) {
+        return;
+    }
+
+    std::unordered_set<CK_ID> ids;
+    for (const auto &entry : m_Callbacks) {
+        ids.insert(entry.first);
+    }
+    for (const auto &entry : m_Data) {
+        ids.insert(entry.first);
+    }
+
+    for (CK_ID id : ids) {
+        CKObject *object = CKGetObject(context, id);
+        if (!object) {
+            continue;
+        }
+
+        const auto callbacks = m_Callbacks.find(id);
+        if (callbacks != m_Callbacks.end()) {
+            for (asIScriptFunction *func : callbacks->second) {
+                DetachScriptCKCallbacks(object, func);
+            }
+        }
+
+        const auto data = m_Data.find(id);
+        if (data != m_Data.end() && data->second) {
+            DetachScriptCKCallbacks(object, static_cast<asIScriptFunction *>(data->second));
+            ResetScriptCKSetRenderCallback(object);
+        }
+    }
+}
 
 void *ScriptCKObjectRetainer::GetData(CK_ID id) const {
     const auto it = m_Data.find(id);
@@ -31,7 +70,9 @@ void ScriptCKObjectRetainer::ReleaseData(CK_ID id) {
     }
 }
 
-void ScriptCKObjectRetainer::Clear() {
+void ScriptCKObjectRetainer::Clear(CKContext *context) {
+    DetachFromLiveObjects(context);
+
     for (const auto &entry : m_Data) {
         auto *func = static_cast<asIScriptFunction *>(entry.second);
         if (func) {

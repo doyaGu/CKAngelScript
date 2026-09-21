@@ -584,7 +584,7 @@ void ScriptManager::ReleaseCKObjectData(CK_ID id) {
 }
 
 void ScriptManager::ClearCKObjectData() {
-    m_CKObjectRetainer.Clear();
+    m_CKObjectRetainer.Clear(m_Context);
 }
 
 void ScriptManager::TrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {

@@ -13,7 +13,7 @@ public:
     void *GetData(CK_ID id) const;
     void SetData(CK_ID id, void *data);
     void ReleaseData(CK_ID id);
-    void Clear();
+    void Clear(CKContext *context = nullptr);
 
     void TrackCallback(CK_ID id, asIScriptFunction *func);
     bool UntrackCallback(CK_ID id, asIScriptFunction *func);
@@ -21,6 +21,7 @@ public:
 
 private:
     void ReleaseCallbackList(std::vector<asIScriptFunction *> callbacks);
+    void DetachFromLiveObjects(CKContext *context);
 
     std::unordered_map<CK_ID, void *> m_Data;
     std::unordered_map<CK_ID, std::vector<asIScriptFunction *> > m_Callbacks;
