@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
 import copy
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import sync_api_catalog
 
@@ -68,6 +71,19 @@ class ApiCompatibilityTests(unittest.TestCase):
             ],
             sync_api_catalog.compatibility_removals(baseline, current),
         )
+
+    def test_surface_fingerprint_normalizes_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.cpp"
+            with mock.patch.object(sync_api_catalog, "REPO_ROOT", root):
+                source.write_bytes(b"first\nsecond\n")
+                lf_fingerprint, lf_inputs = sync_api_catalog.surface_fingerprint([source])
+                source.write_bytes(b"first\r\nsecond\r\n")
+                crlf_fingerprint, crlf_inputs = sync_api_catalog.surface_fingerprint([source])
+
+            self.assertEqual(lf_fingerprint, crlf_fingerprint)
+            self.assertEqual(lf_inputs, crlf_inputs)
 
 
 if __name__ == "__main__":

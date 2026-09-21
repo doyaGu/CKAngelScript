@@ -246,7 +246,8 @@ def surface_fingerprint(paths: Iterable[Path]) -> tuple[str, list[str]]:
         names.append(name)
         digest.update(name.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        digest.update(content)
         digest.update(b"\0")
     return digest.hexdigest(), names
 
