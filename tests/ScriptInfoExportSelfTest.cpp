@@ -1,4 +1,5 @@
 #include "ScriptSelfTests.h"
+#include "ScopedEnvVar.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -11,35 +12,6 @@
 #if CKAS_ENABLE_API_EXPORT
 
 namespace {
-
-class ScopedEnvVar {
-public:
-    ScopedEnvVar(const char *name, const char *value)
-        : m_Name(name) {
-        const char *oldValue = std::getenv(name);
-        if (oldValue) {
-            m_HadOldValue = true;
-            m_OldValue = oldValue;
-        }
-        _putenv_s(name, value ? value : "");
-    }
-
-    ~ScopedEnvVar() {
-        if (m_HadOldValue) {
-            _putenv_s(m_Name.c_str(), m_OldValue.c_str());
-        } else {
-            _putenv_s(m_Name.c_str(), "");
-        }
-    }
-
-    ScopedEnvVar(const ScopedEnvVar &) = delete;
-    ScopedEnvVar &operator=(const ScopedEnvVar &) = delete;
-
-private:
-    std::string m_Name;
-    bool m_HadOldValue = false;
-    std::string m_OldValue;
-};
 
 std::string ReadFile(const std::filesystem::path &path) {
     std::ifstream in(path, std::ios::binary);

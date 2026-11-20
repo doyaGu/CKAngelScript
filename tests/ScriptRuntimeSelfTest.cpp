@@ -1,4 +1,5 @@
 #include "ScriptSelfTests.h"
+#include "ScopedEnvVar.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -16,38 +17,6 @@
 #include "ScriptRuntimeMetadata.h"
 
 namespace {
-
-class ScopedEnvVar {
-public:
-    ScopedEnvVar(const char *name, const std::string &value) : m_Name(name ? name : "") {
-        if (m_Name.empty()) {
-            return;
-        }
-        char *oldValue = nullptr;
-        size_t oldSize = 0;
-        if (_dupenv_s(&oldValue, &oldSize, m_Name.c_str()) == 0 && oldValue) {
-            m_HadValue = true;
-            m_OldValue = oldValue;
-            std::free(oldValue);
-        }
-        _putenv_s(m_Name.c_str(), value.c_str());
-    }
-
-    ~ScopedEnvVar() {
-        if (m_Name.empty()) {
-            return;
-        }
-        _putenv_s(m_Name.c_str(), m_HadValue ? m_OldValue.c_str() : "");
-    }
-
-    ScopedEnvVar(const ScopedEnvVar &) = delete;
-    ScopedEnvVar &operator=(const ScopedEnvVar &) = delete;
-
-private:
-    std::string m_Name;
-    std::string m_OldValue;
-    bool m_HadValue = false;
-};
 
 bool WriteRuntimeSelfTestFile(const std::filesystem::path &path, const std::string &text, std::string &error) {
     std::ofstream output(path, std::ios::binary);

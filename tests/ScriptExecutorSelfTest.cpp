@@ -1,4 +1,5 @@
 #include "ScriptSelfTests.h"
+#include "ScopedEnvVar.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -66,35 +67,6 @@ void DestroyExecutorSelfTestObject(CKContext *context, CKObject *object) {
         context->DestroyObject(object);
     }
 }
-
-class ScopedEnvVar {
-public:
-    ScopedEnvVar(const char *name, const std::string &value) : m_Name(name ? name : "") {
-        if (m_Name.empty()) {
-            return;
-        }
-        char *oldValue = nullptr;
-        size_t oldSize = 0;
-        if (_dupenv_s(&oldValue, &oldSize, m_Name.c_str()) == 0 && oldValue) {
-            m_HadValue = true;
-            m_OldValue = oldValue;
-            std::free(oldValue);
-        }
-        _putenv_s(m_Name.c_str(), value.c_str());
-    }
-
-    ~ScopedEnvVar() {
-        if (m_Name.empty()) {
-            return;
-        }
-        _putenv_s(m_Name.c_str(), m_HadValue ? m_OldValue.c_str() : "");
-    }
-
-private:
-    std::string m_Name;
-    std::string m_OldValue;
-    bool m_HadValue = false;
-};
 
 bool WriteExecutorSelfTestFile(const std::filesystem::path &path, const char *text, std::string &error) {
     std::ofstream output(path, std::ios::binary);
@@ -1348,6 +1320,13 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         }
         if (behavior && deleteCallbackSent) {
             CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
+        }
+        if (chainRoot) {
+            while (chainRoot->GetSubBehaviorLinkCount() > 0) {
+                chainRoot->RemoveSubBehaviorLink(0);
+            }
+            if (chainTarget) chainRoot->RemoveSubBehavior(chainTarget);
+            if (chainSource) chainRoot->RemoveSubBehavior(chainSource);
         }
         DestroyExecutorSelfTestObject(context, chainTargetToRoot);
         DestroyExecutorSelfTestObject(context, chainSourceToTarget);

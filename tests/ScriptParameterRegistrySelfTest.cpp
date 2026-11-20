@@ -2446,7 +2446,8 @@ bool RunCKEnumStructScriptSelfTest(asIScriptEngine *engine, std::string &error) 
     }
 
     int values[2] = {7, 9};
-    CKSTRING descriptions[2] = {const_cast<CKSTRING>("First"), const_cast<CKSTRING>("Second")};
+    char first[] = "First", second[] = "Second";
+    char *descriptions[] = {first, second};
     CKEnumStruct input;
     input.NbData = 2;
     input.Vals = values;
@@ -2510,7 +2511,8 @@ bool RunCKFlagsStructScriptSelfTest(asIScriptEngine *engine, std::string &error)
     }
 
     int values[2] = {1, 2};
-    CKSTRING descriptions[2] = {const_cast<CKSTRING>("Alpha"), const_cast<CKSTRING>("Beta")};
+    char first[] = "Alpha", second[] = "Beta";
+    char *descriptions[] = {first, second};
     CKFlagsStruct input;
     input.NbData = 2;
     input.Vals = values;
@@ -2583,7 +2585,8 @@ bool RunCKStructStructScriptSelfTest(asIScriptEngine *engine, std::string &error
     }
 
     CKGUID guids[2] = {CKGUID(0x11111111, 0x22222222), CKGUID(0x33333333, 0x44444444)};
-    CKSTRING descriptions[2] = {const_cast<CKSTRING>("First"), const_cast<CKSTRING>("Second")};
+    char first[] = "First", second[] = "Second";
+    char *descriptions[] = {first, second};
     CKStructStruct input;
     input.NbData = 2;
     input.Guids = guids;
@@ -11027,7 +11030,7 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !arrayType->GetMethodByDecl("bool SetElementObject(int i, int c, CKObject@ obj)") ||
         !arrayType->GetMethodByDecl("CKDataRow &GetRow(int n)") ||
         !arrayType->GetMethodByDecl("CKDataRow &InsertRow(int n = -1)") ||
-        !arrayType->GetMethodByDecl("CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)") ||
+        !arrayType->GetMethodByDecl("CKDataRow &FindRow(int c, CK_COMPOPERATOR op, uintptr_t key, int size = 0, int startIndex = 0)") ||
         !arrayType->GetMethodByDecl("void RemoveRow(int row)") ||
         !arrayType->GetMethodByDecl("void Clear(bool params = true)") ||
         !arrayType->GetMethodByDecl("NativePointer GetAppData()") ||
