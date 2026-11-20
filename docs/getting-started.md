@@ -21,7 +21,10 @@ ctest --test-dir build/sdl -C Release --output-on-failure
 Use a separate build directory per architecture. With Visual Studio, choose
 `-A Win32`, `-A x64`, or `-A ARM64` to match Player. CMake fetches the pinned
 AngelScript SDK if it is missing. For offline builds, pass
-`-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.38.0.zip`.
+`-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.39.0.zip`.
+
+When upgrading from AngelScript 2.38.0, move the extracted `deps/angelscript`
+directory aside and use a fresh build directory. CMake will unpack the pinned SDK.
 
 `CKAS_BUILD_CORE_TESTS` is enabled by default. CTest runs both the host-independent
 core tests and the engine integration test, which loads the actual plugin into

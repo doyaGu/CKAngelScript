@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "angelScriptVersion": "2.38.0",
+  "angelScriptVersion": "2.39.0",
   "engineProperties": {
     "useCharacterLiterals": 1,
     "allowUnsafeReferences": 1,

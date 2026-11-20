@@ -57,8 +57,8 @@ CATALOG_PROFILE = {
     },
     "dependencies": {
         "AngelScript": {
-            "version": "2.38.0",
-            "sha256": "b33b5dbcda10317ef67d628353d83246984ce6fcac102d4dc2aed121eba52e6f",
+            "version": "2.39.0",
+            "sha256": "f029bea4e52c360c750d3a805b80f9317d177241fadbc8f93845e38355d11287",
         },
         "DynCall": {
             "version": "1.4",

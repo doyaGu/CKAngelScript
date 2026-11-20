@@ -48,7 +48,7 @@ cmake --install build/sdl --config Release --prefix /path/to/stage
 
 For a Visual Studio generator, select the Player architecture with
 `-A Win32`, `-A x64`, or `-A ARM64`. Use a separate build tree per target.
-For an offline build, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.38.0.zip`.
+For an offline build, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.39.0.zip`.
 
 The stage contains the plugin under `BuildingBlocks` and the development
 headers under `include`. Copy the plugin into the matching Player installation.

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "catalog": "docs/script-api.json",
-  "catalogSha256": "27ea8903bca538a15c7f5d84f7a802fc00c8337171aa7495212e7c1de0ad1f8b",
-  "registrationSurfaceSha256": "a304a223b499a97584b37b9fb6c06b3ee9b7c530a5c92dffdff18ce437e0afcc",
+  "catalogSha256": "844583e2939e3d371e2918f3b6674f0fe53e220b8afd7fe355dbee8ceaab9570",
+  "registrationSurfaceSha256": "bdd9a5e62bc663f1180dd9df2ed6cdccc2b2d457491075dc5ff5649a64a84c4e",
   "registrationInputs": [
     ".github/workflows/build.yml",
     "CMakeLists.txt",
@@ -50,8 +50,8 @@
     },
     "dependencies": {
       "AngelScript": {
-        "version": "2.38.0",
-        "sha256": "b33b5dbcda10317ef67d628353d83246984ce6fcac102d4dc2aed121eba52e6f"
+        "version": "2.39.0",
+        "sha256": "f029bea4e52c360c750d3a805b80f9317d177241fadbc8f93845e38355d11287"
       },
       "DynCall": {
         "version": "1.4",
