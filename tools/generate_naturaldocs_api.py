@@ -736,7 +736,7 @@ def generate(api_json: Path, metadata_path: Path, out_dir: Path, quality_json: P
 def self_test() -> None:
     sample = {
         "schemaVersion": 1,
-        "angelScriptVersion": "2.38.0",
+        "angelScriptVersion": "2.39.0",
         "engineProperties": {},
         "globalFunctions": [
             {"docId": "function::scene::findobject", "namespace": "Scene", "name": "FindObject", "declaration": "ObjectRef@ FindObject(const string &in name)"},

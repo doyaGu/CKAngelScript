@@ -546,12 +546,18 @@ std::string ExportEnum(asITypeInfo *type) {
         return "{}";
     }
     std::vector<std::string> values;
+    const int underlyingType = type->GetUnderlyingTypeId();
     for (asUINT i = 0; i < type->GetEnumValueCount(); ++i) {
-        int value = 0;
+        asINT64 value = 0;
         const char *name = type->GetEnumValueByIndex(i, &value);
+        // The widened API can return unsigned CK flags for a signed int enum.
+        // Export the same signed 32-bit value that scripts read.
+        if (underlyingType == asTYPEID_INT32) {
+            value = static_cast<int32_t>(value);
+        }
         values.push_back(WriteObject({
             {"name", SafeString(name)},
-            {"value", JsonInt(value), true}
+            {"value", underlyingType == asTYPEID_UINT64 ? JsonUInt(static_cast<asQWORD>(value)) : JsonInt(value), true}
         }, 8));
     }
     std::sort(values.begin(), values.end());
@@ -571,7 +577,7 @@ std::string ExportTypedef(asIScriptEngine *engine, asITypeInfo *type) {
     if (!type) {
         return "{}";
     }
-    const int aliasedTypeId = type->GetTypedefTypeId();
+    const int aliasedTypeId = type->GetUnderlyingTypeId();
     return WriteObject(WithApiCategory({
         {"docId", JoinDocId({"typedef", SafeString(type->GetNamespace()), SafeString(type->GetName())})},
         {"name", SafeString(type->GetName())},
@@ -589,8 +595,8 @@ std::string ExportFuncdef(asIScriptEngine *engine, asITypeInfo *type) {
         return "{}";
     }
     // Template member funcdefs (notably array<T>::less) contain unresolved
-    // placeholder types. AngelScript 2.38.0 cannot safely render their native
-    // declaration before a concrete template instance exists.
+    // placeholder types. Rendering their native declaration requires
+    // a concrete template instance.
     asIScriptFunction *signature = type->GetParentType() ? nullptr : type->GetFuncdefSignature();
     const std::string declaration = signature
         ? FunctionDeclaration(signature, false)

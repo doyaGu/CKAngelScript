@@ -1,6 +1,7 @@
 #include "ScriptFormat.h"
 
 #include <cassert>
+#include <cstdint>
 #include <exception>
 #include <string>
 #include <sstream>
@@ -154,20 +155,46 @@ static void *GetGenericArgValueAddress(asIScriptGeneric *gen, int index, int typ
     return nullptr;
 }
 
-static const char *FindEnumValueName(const asITypeInfo *type, int value) {
-    if (!type) {
-        return nullptr;
-    }
-
-    const asUINT count = type->GetEnumValueCount();
-    for (asUINT n = 0; n < count; ++n) {
-        int enumVal = 0;
-        const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
-        if (enumVal == value) {
-            return enumName;
+static const char *FindEnumValueName(const asITypeInfo &type, asINT64 value) {
+    const asQWORD mask = ~asQWORD{0} >> (8 * (sizeof(asQWORD) - type.GetSize()));
+    const asQWORD bits = static_cast<asQWORD>(value) & mask;
+    for (asUINT n = 0; n < type.GetEnumValueCount(); ++n) {
+        asINT64 enumValue = 0;
+        const char *name = type.GetEnumValueByIndex(n, &enumValue);
+        if ((static_cast<asQWORD>(enumValue) & mask) == bits) {
+            return name;
         }
     }
     return nullptr;
+}
+
+template <class Write>
+static void WriteEnumValue(const asITypeInfo &type, const void *address, Write write) {
+    const auto format = [&](auto value) {
+        if (const char *name = FindEnumValueName(type, static_cast<asINT64>(value))) {
+            write(name);
+        } else {
+            write(value);
+        }
+    };
+    switch (type.GetUnderlyingTypeId()) {
+        case asTYPEID_INT8:
+            return format(static_cast<int>(*static_cast<const int8_t *>(address)));
+        case asTYPEID_INT16:
+            return format(static_cast<int>(*static_cast<const int16_t *>(address)));
+        case asTYPEID_UINT8:
+            return format(static_cast<unsigned int>(*static_cast<const uint8_t *>(address)));
+        case asTYPEID_UINT16:
+            return format(static_cast<unsigned int>(*static_cast<const uint16_t *>(address)));
+        case asTYPEID_UINT32:
+            return format(*static_cast<const uint32_t *>(address));
+        case asTYPEID_INT64:
+            return format(*static_cast<const int64_t *>(address));
+        case asTYPEID_UINT64:
+            return format(*static_cast<const uint64_t *>(address));
+        default:
+            return format(*static_cast<const int32_t *>(address));
+    }
 }
 
 static int ObjectBaseTypeIdFromArgument(int typeId) {
@@ -254,13 +281,7 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
             stream << "unknown";
             return;
         }
-        const int value = *static_cast<int *>(addr);
-        const char *enumName = FindEnumValueName(type, value);
-        if (enumName) {
-            stream << enumName;
-        } else {
-            stream << value;
-        }
+        WriteEnumValue(*type, addr, [&](auto value) { stream << value; });
     } else if (typeId & asTYPEID_MASK_OBJECT) {
         const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
         asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
@@ -414,13 +435,7 @@ static std::string FormatString(asIScriptGeneric *gen) {
                 pushString("unknown");
                 continue;
             }
-            const int value = *static_cast<int *>(addr);
-            const char *enumName = FindEnumValueName(type, value);
-            if (enumName) {
-                pushString(enumName);
-            } else {
-                store.push_back(value);
-            }
+            WriteEnumValue(*type, addr, [&](auto value) { store.push_back(value); });
         } else if (typeId & asTYPEID_MASK_OBJECT) {
             const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
             asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);

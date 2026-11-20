@@ -41,7 +41,7 @@ Prerequisites:
 - DynCall libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
 - AngelScript source under `deps/angelscript`; if it is missing, CMake downloads the SDK from AngelCode.
 
-For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.38.0.zip`.
+For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.39.0.zip`.
 
 ```powershell
 git submodule update --init --recursive

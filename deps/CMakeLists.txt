@@ -1,5 +1,5 @@
 # AngelScript
-set(CKAS_ANGELSCRIPT_VERSION "2.38.0" CACHE STRING "AngelScript SDK version to download when deps/angelscript is missing")
+set(CKAS_ANGELSCRIPT_VERSION "2.39.0" CACHE STRING "AngelScript SDK version to download when deps/angelscript is missing")
 set(CKAS_ANGELSCRIPT_ROOT
         "${CMAKE_CURRENT_SOURCE_DIR}/angelscript"
         CACHE PATH "AngelScript SDK source root")
@@ -7,7 +7,7 @@ set(CKAS_ANGELSCRIPT_URL
         ""
         CACHE STRING "AngelScript SDK archive URL; empty uses the AngelCode URL for CKAS_ANGELSCRIPT_VERSION")
 set(CKAS_ANGELSCRIPT_SHA256
-        "b33b5dbcda10317ef67d628353d83246984ce6fcac102d4dc2aed121eba52e6f"
+        "f029bea4e52c360c750d3a805b80f9317d177241fadbc8f93845e38355d11287"
         CACHE STRING "Expected SHA256 for the AngelScript SDK archive")
 set(CKAS_ANGELSCRIPT_ARCHIVE "" CACHE FILEPATH "Existing AngelScript SDK archive to use instead of downloading")
 set(CKAS_ANGELSCRIPT_DOWNLOAD_DIR
@@ -17,8 +17,20 @@ set(CKAS_ANGELSCRIPT_TLS_VERIFY OFF CACHE BOOL "Verify TLS certificates when dow
 
 set(CKAS_ANGELSCRIPT_SENTINEL "${CKAS_ANGELSCRIPT_ROOT}/angelscript/include/angelscript.h")
 
+function(ckas_check_angelscript_version header)
+    file(STRINGS "${header}" version_string
+            REGEX "^#define[ 	]+ANGELSCRIPT_VERSION_STRING[ 	]+" LIMIT_COUNT 1)
+    string(REGEX MATCH [["([^"]+)"]] match "${version_string}")
+    if (NOT "${CMAKE_MATCH_1}" STREQUAL "${CKAS_ANGELSCRIPT_VERSION}")
+        message(FATAL_ERROR
+                "Expected AngelScript ${CKAS_ANGELSCRIPT_VERSION}, found '${CMAKE_MATCH_1}' in ${header}.\n"
+                "Restore the matching SDK or move the old SDK aside and configure in a fresh build directory.")
+    endif ()
+endfunction()
+
 function(ckas_prepare_angelscript)
     if (EXISTS "${CKAS_ANGELSCRIPT_SENTINEL}")
+        ckas_check_angelscript_version("${CKAS_ANGELSCRIPT_SENTINEL}")
         return()
     endif ()
 
@@ -84,35 +96,40 @@ function(ckas_prepare_angelscript)
         message(FATAL_ERROR "Downloaded AngelScript SDK archive has an unexpected layout.")
     endif ()
 
+    ckas_check_angelscript_version("${extract_dir}/sdk/angelscript/include/angelscript.h")
     file(RENAME "${extract_dir}/sdk" "${staged_root}")
     file(RENAME "${staged_root}" "${CKAS_ANGELSCRIPT_ROOT}")
 endfunction()
 
 ckas_prepare_angelscript()
 
-add_subdirectory(angelscript/angelscript/projects/cmake EXCLUDE_FROM_ALL)
+# CKAngelScript installs its own headers. The official SDK ZIP also omits
+# the files needed by the upstream CMake package install rules.
+set(AS_DISABLE_INSTALL ON CACHE INTERNAL "Disable installation of the embedded AngelScript library")
+add_subdirectory("${CKAS_ANGELSCRIPT_ROOT}/angelscript/projects/cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/angelscript/angelscript/projects/cmake" EXCLUDE_FROM_ALL)
 target_include_directories(angelscript INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>)
+        $<BUILD_INTERFACE:${CKAS_ANGELSCRIPT_ROOT}/angelscript/include>)
 
 add_library(angelscript_addon STATIC
-        angelscript/add_on/scriptany/scriptany.cpp
-        angelscript/add_on/scriptarray/scriptarray.cpp
-        angelscript/add_on/scriptstdstring/scriptstdstring.cpp
-        angelscript/add_on/scriptstdstring/scriptstdstring_utils.cpp
-        angelscript/add_on/scriptdictionary/scriptdictionary.cpp
-        angelscript/add_on/scriptgrid/scriptgrid.cpp
-        angelscript/add_on/scriptmath/scriptmath.cpp
-        angelscript/add_on/scriptmath/scriptmathcomplex.cpp
-        angelscript/add_on/scripthandle/scripthandle.cpp
-        angelscript/add_on/weakref/weakref.cpp
-        angelscript/add_on/datetime/datetime.cpp
-        angelscript/add_on/scriptfile/scriptfile.cpp
-        angelscript/add_on/scriptfile/scriptfilesystem.cpp
-        angelscript/add_on/scripthelper/scripthelper.cpp
-        angelscript/add_on/scriptbuilder/scriptbuilder.cpp
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptany/scriptany.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptarray/scriptarray.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptstdstring/scriptstdstring.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptstdstring/scriptstdstring_utils.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptdictionary/scriptdictionary.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptgrid/scriptgrid.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptmath/scriptmath.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptmath/scriptmathcomplex.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scripthandle/scripthandle.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/weakref/weakref.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/datetime/datetime.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptfile/scriptfile.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptfile/scriptfilesystem.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scripthelper/scripthelper.cpp"
+        "${CKAS_ANGELSCRIPT_ROOT}/add_on/scriptbuilder/scriptbuilder.cpp"
         )
 target_include_directories(angelscript_addon PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript>)
+        $<BUILD_INTERFACE:${CKAS_ANGELSCRIPT_ROOT}>)
 target_link_libraries(angelscript_addon PUBLIC angelscript)
 
 # fmt
