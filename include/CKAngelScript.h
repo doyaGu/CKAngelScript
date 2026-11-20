@@ -17,7 +17,7 @@
 #define CKAS_API __declspec(dllimport)
 #endif
 #else
-#define CKAS_API
+#define CKAS_API __attribute__((visibility("default")))
 #endif
 
 typedef struct CKAngelScriptExecution CKAngelScriptExecution;

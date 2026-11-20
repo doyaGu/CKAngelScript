@@ -23,32 +23,23 @@ set_target_properties(CKAngelScriptCoreTests PROPERTIES
 
 add_test(NAME CKAngelScript.Core COMMAND CKAngelScriptCoreTests)
 
-if (CKAS_ENGINE_TEST_RUNTIME_DIR)
-    foreach (_ckas_runtime_dll CK2.dll VxMath.dll)
-        if (NOT EXISTS "${CKAS_ENGINE_TEST_RUNTIME_DIR}/${_ckas_runtime_dll}")
-            message(FATAL_ERROR
-                    "CKAS_ENGINE_TEST_RUNTIME_DIR is missing ${_ckas_runtime_dll}: "
-                    "${CKAS_ENGINE_TEST_RUNTIME_DIR}")
-        endif ()
-    endforeach ()
+add_executable(CKAngelScriptEngineTests
+        ScriptEngineIntegrationTest.cpp
+        "${PROJECT_SOURCE_DIR}/src/ScriptObjectIdentity.cpp"
+)
+target_include_directories(CKAngelScriptEngineTests PRIVATE
+        "${PROJECT_SOURCE_DIR}/include"
+        "${PROJECT_SOURCE_DIR}/src"
+        "${CKAS_ANGELSCRIPT_ROOT}/angelscript/include"
+)
+target_link_libraries(CKAngelScriptEngineTests PRIVATE CK2 VxMath)
+add_dependencies(CKAngelScriptEngineTests CKAngelScript)
+set_target_properties(CKAngelScriptEngineTests PROPERTIES FOLDER "Tests")
 
-    add_executable(CKAngelScriptEngineTests
-            ScriptEngineIntegrationTest.cpp
-            "${PROJECT_SOURCE_DIR}/src/ScriptObjectIdentity.cpp"
-    )
-    target_include_directories(CKAngelScriptEngineTests PRIVATE
-            "${PROJECT_SOURCE_DIR}/include"
-            "${PROJECT_SOURCE_DIR}/src"
-            "${CKAS_ANGELSCRIPT_ROOT}/angelscript/include"
-    )
-    target_link_libraries(CKAngelScriptEngineTests PRIVATE CK2 VxMath)
-    add_dependencies(CKAngelScriptEngineTests CKAngelScript)
-    set_target_properties(CKAngelScriptEngineTests PROPERTIES FOLDER "Tests")
-
-    add_test(NAME CKAngelScript.Engine
-            COMMAND ${CMAKE_COMMAND} -E env
-            "PATH=${CKAS_ENGINE_TEST_RUNTIME_DIR};$ENV{PATH}"
-            "CKAS_DISABLE_CK2_PROTOTYPE_HOOK=1"
-            $<TARGET_FILE:CKAngelScriptEngineTests>
-            $<TARGET_FILE:CKAngelScript>)
-endif ()
+add_test(NAME CKAngelScript.Engine COMMAND CKAngelScriptEngineTests $<TARGET_FILE:CKAngelScript>)
+if(WIN32)
+    set_property(TEST CKAngelScript.Engine PROPERTY ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:CK2>"
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:VxMath>"
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:SDL3::SDL3>")
+endif()

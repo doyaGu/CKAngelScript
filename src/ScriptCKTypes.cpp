@@ -159,9 +159,9 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CK2dCurvePoint", sizeof(CK2dCurvePoint), asOBJ_VALUE | asGetTypeTraits<CK2dCurvePoint>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CK2dCurve", sizeof(CK2dCurve), asOBJ_VALUE | asGetTypeTraits<CK2dCurve>()); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectType("CKKey", sizeof(CKKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKKey>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKKey", sizeof(CKKey), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<CKKey>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKRotationKey", sizeof(CKRotationKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKRotationKey>()); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectType("CKPositionKey", sizeof(CKPositionKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPositionKey>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKPositionKey", sizeof(CKPositionKey), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<CKPositionKey>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKTCBPositionKey", sizeof(CKTCBPositionKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKTCBPositionKey>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKTCBRotationKey", sizeof(CKTCBRotationKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKTCBRotationKey>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKBezierKeyFlags", sizeof(CKBezierKeyFlags), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKBezierKeyFlags>()); CKAS_CHECK_REGISTER(r);
@@ -283,7 +283,11 @@ void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXArray<XManagerArray, CKBaseManager *>(engine, "XManagerArray", "CKBaseManager@");
 
     RegisterXSArray<XSArray<CKDWORD>, CKDWORD>(engine, "XDwordArray", "CKDWORD");
+#if CKAS_RUNTIME_SDL
+    RegisterXSArray<CKDataRow, CKUINTPTR>(engine, "CKDataRow", "uintptr_t");
+#else
     RegisterXSArray<CKDataRow, CKDWORD>(engine, "CKDataRow", "CKDWORD");
+#endif
     RegisterXSArray<XSArray<CK_CLASSID>, CK_CLASSID>(engine, "XClassIDArray", "CK_CLASSID");
     RegisterXSArray<XSArray<VxImageDescEx>, VxImageDescEx>(engine, "XImageArray", "VxImageDescEx");
 

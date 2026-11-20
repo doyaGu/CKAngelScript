@@ -3,8 +3,6 @@
 #include <string>
 #include <vector>
 
-#include <windows.h>
-
 #include "CKAll.h"
 #include "CKAngelScript.h"
 #include "CKPluginManager.h"
@@ -42,20 +40,15 @@ struct PublicApiSymbols {
     decltype(&CKAngelScriptBorrowExecutionResult) BorrowExecutionResult = nullptr;
 
     bool Resolve(const char *pluginPath, std::string &error) {
-        std::string moduleName = pluginPath ? pluginPath : "";
-        const std::string::size_type separator = moduleName.find_last_of("\\/");
-        if (separator != std::string::npos) {
-            moduleName.erase(0, separator + 1);
-        }
-
-        HMODULE module = moduleName.empty() ? nullptr : GetModuleHandleA(moduleName.c_str());
+        auto *plugins = CKGetPluginManager();
+        auto *module = plugins ? plugins->GetPluginDllInfo(pluginPath) : nullptr;
         if (!module) {
             error = "Could not find the CKAngelScript module loaded by CKPluginManager.";
             return false;
         }
 
 #define CKAS_RESOLVE_SYMBOL(Member, Symbol)                                                        \
-    Member = reinterpret_cast<decltype(Member)>(GetProcAddress(module, #Symbol));                  \
+    Member = reinterpret_cast<decltype(Member)>(module->GetFunctionPtr(#Symbol));                  \
     if (!Member) {                                                                                 \
         error = "CKAngelScript plugin is missing public ABI symbol " #Symbol ".";                 \
         return false;                                                                              \

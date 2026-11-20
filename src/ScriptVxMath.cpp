@@ -1,3 +1,4 @@
+#include "ScriptEngineCompat.h"
 #include "ScriptVxMath.h"
 
 #include <cassert>
@@ -22,6 +23,12 @@
 #if CKVERSION != 0x13022002
 typedef BYTE XBYTE;
 typedef DWORD XULONG;
+#endif
+
+#if CKAS_RUNTIME_SDL
+using ScriptVxWord = XDWORD;
+#else
+using ScriptVxWord = unsigned long;
 #endif
 
 static const float g_EPSILON = EPSILON;
@@ -622,7 +629,9 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
 #if CKVERSION == 0x13022002
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_HW_SKINNING", CKRST_SPECIFICCAPS_HW_SKINNING); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_AUTGENMIPMAP", CKRST_SPECIFICCAPS_AUTGENMIPMAP); CKAS_CHECK_REGISTER(r);
+#if !CKAS_RUNTIME_SDL
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_EXPLICITSWAPCHAIN", CKRST_SPECIFICCAPS_EXPLICITSWAPCHAIN); CKAS_CHECK_REGISTER(r);
+#endif
 #endif
 
     // CKRST_TFILTERCAPS
@@ -654,7 +663,9 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_PROJECTED", CKRST_TEXTURECAPS_PROJECTED); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CUBEMAP", CKRST_TEXTURECAPS_CUBEMAP); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_VOLUMEMAP", CKRST_TEXTURECAPS_VOLUMEMAP); CKAS_CHECK_REGISTER(r);
+#if !CKAS_RUNTIME_SDL
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_NONPOW2", CKRST_TEXTURECAPS_NONPOW2); CKAS_CHECK_REGISTER(r);
+#endif
 #endif
 
     // CKRST_STENCILCAPS
@@ -1858,8 +1869,14 @@ static bool VxDeleteDirectoryWrapper(const std::string &dir) {
 }
 
 static bool VxGetCurrentDirectoryWrapper(std::string &dir) {
+#if CKAS_RUNTIME_SDL
+    const XString current = VxGetCurrentDirectory();
+    dir = current.CStr();
+    return !dir.empty();
+#else
     dir.resize(260);
     return VxGetCurrentDirectory(dir.data());
+#endif
 }
 
 static bool VxSetCurrentDirectoryWrapper(const std::string &dir) {
@@ -2174,7 +2191,7 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
 // VxBbox
 
-static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, NativePointer oFlags) {
+static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer iVertices, ScriptVxWord iStride, NativePointer oFlags) {
     if (iVcount > 0 && (iVertices.IsNull() || oFlags.IsNull())) {
         SetVxNativeBufferException("VxBbox::ClassifyVertices requires non-null vertices and flags pointers when count is positive.");
         return;
@@ -2182,7 +2199,7 @@ static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer
     box.ClassifyVertices(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, reinterpret_cast<XULONG *>(oFlags.Get()));
 }
 
-static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, int iAxis, NativePointer oFlags) {
+static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, NativePointer iVertices, ScriptVxWord iStride, int iAxis, NativePointer oFlags) {
     if (iVcount > 0 && (iVertices.IsNull() || oFlags.IsNull())) {
         SetVxNativeBufferException("VxBbox::ClassifyVerticesOneAxis requires non-null vertices and flags pointers when count is positive.");
         return;
@@ -2190,14 +2207,14 @@ static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, Native
     box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<XULONG *>(oFlags.Get()));
 }
 
-static bool VxBboxClassifyVerticesBuffer(const VxBbox &box, int count, NativeBuffer *vertices, unsigned long stride, NativeBuffer *flags) {
+static bool VxBboxClassifyVerticesBuffer(const VxBbox &box, int count, NativeBuffer *vertices, ScriptVxWord stride, NativeBuffer *flags) {
     if (count <= 0) {
         return true;
     }
     size_t requiredVertices = 0;
     size_t requiredFlags = 0;
     if (!ComputeStridedByteSize(count, stride, sizeof(VxVector), requiredVertices) ||
-        !ComputePackedByteSize(count, sizeof(unsigned long), requiredFlags)) {
+        !ComputePackedByteSize(count, sizeof(ScriptVxWord), requiredFlags)) {
         SetVxNativeBufferException("VxBbox::ClassifyVertices count/stride overflows NativeBuffer size calculation.");
         return false;
     }
@@ -2230,14 +2247,14 @@ static bool VxBboxClassifyVerticesBuffer(const VxBbox &box, int count, NativeBuf
     return true;
 }
 
-static bool VxBboxClassifyVerticesOneAxisBuffer(const VxBbox &box, int count, NativeBuffer *vertices, unsigned long stride, int axis, NativeBuffer *flags) {
+static bool VxBboxClassifyVerticesOneAxisBuffer(const VxBbox &box, int count, NativeBuffer *vertices, ScriptVxWord stride, int axis, NativeBuffer *flags) {
     if (count <= 0) {
         return true;
     }
     size_t requiredVertices = 0;
     size_t requiredFlags = 0;
     if (!ComputeStridedByteSize(count, stride, sizeof(VxVector), requiredVertices) ||
-        !ComputePackedByteSize(count, sizeof(unsigned long), requiredFlags)) {
+        !ComputePackedByteSize(count, sizeof(ScriptVxWord), requiredFlags)) {
         SetVxNativeBufferException("VxBbox::ClassifyVerticesOneAxis count/stride overflows NativeBuffer size calculation.");
         return false;
     }
@@ -3344,7 +3361,7 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r, float g, float b)", asFUNCTIONPR([](float r, float g, float b, VxColor *self) { new(self) VxColor(r, g, b); }, (float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r)", asFUNCTIONPR([](float r, VxColor *self) { new(self) VxColor(r); }, (float, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint col)", asFUNCTIONPR([](unsigned long col, VxColor *self) { new(self) VxColor(col); }, (unsigned long, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint col)", asFUNCTIONPR([](ScriptVxWord col, VxColor *self) { new(self) VxColor(col); }, (ScriptVxWord, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b, int a)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -3376,7 +3393,7 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b, float a)", asMETHODPR(VxColor, Set, (float, float, float, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b)", asMETHODPR(VxColor, Set, (float, float, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("VxColor", "void Set(uint color)", asMETHODPR(VxColor, Set, (unsigned long), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(uint color)", asMETHODPR(VxColor, Set, (ScriptVxWord), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b, int a)", asMETHODPR(VxColor, Set, (int, int, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b)", asMETHODPR(VxColor, Set, (int, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -3385,21 +3402,21 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxColor", "float GetSquareDistance(const VxColor &in color) const", asMETHOD(VxColor, GetSquareDistance), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterGlobalFunction("uint VxColorConvert(float r, float g, float b, float a = 1.0)", asFUNCTIONPR(VxColor::Convert, (float, float, float, float), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint VxColorConvert(int r, int g, int b, int a = 255)", asFUNCTIONPR(VxColor::Convert, (int, int, int, int), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint VxColorConvert(float r, float g, float b, float a = 1.0)", asFUNCTIONPR(VxColor::Convert, (float, float, float, float), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint VxColorConvert(int r, int g, int b, int a = 255)", asFUNCTIONPR(VxColor::Convert, (int, int, int, int), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(float r, float g, float b, float a)", asFUNCTIONPR(RGBAFTOCOLOR, (float, float, float, float), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(const VxColor &in color)", asFUNCTIONPR(RGBAFTOCOLOR, (const VxColor *), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(float r, float g, float b, float a)", asFUNCTIONPR(RGBAFTOCOLOR, (float, float, float, float), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(const VxColor &in color)", asFUNCTIONPR(RGBAFTOCOLOR, (const VxColor *), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 #endif
 
-    r = engine->RegisterGlobalFunction("uint ColorGetRed(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetRed(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorGetAlpha(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetAlpha(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorGetGreen(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetGreen(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorGetBlue(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetBlue(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorSetAlpha(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetAlpha(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorSetRed(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetRed(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorSetGreen(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetGreen(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("uint ColorSetBlue(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetBlue(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorGetRed(uint rgb)", asFUNCTIONPR([](ScriptVxWord rgb) -> ScriptVxWord { return ColorGetRed(rgb); }, (ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorGetAlpha(uint rgb)", asFUNCTIONPR([](ScriptVxWord rgb) -> ScriptVxWord { return ColorGetAlpha(rgb); }, (ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorGetGreen(uint rgb)", asFUNCTIONPR([](ScriptVxWord rgb) -> ScriptVxWord { return ColorGetGreen(rgb); }, (ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorGetBlue(uint rgb)", asFUNCTIONPR([](ScriptVxWord rgb) -> ScriptVxWord { return ColorGetBlue(rgb); }, (ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorSetAlpha(uint rgba, uint x)", asFUNCTIONPR([](ScriptVxWord rgba, ScriptVxWord x) { return ColorSetAlpha(rgba, x); }, (ScriptVxWord, ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorSetRed(uint rgba, uint x)", asFUNCTIONPR([](ScriptVxWord rgba, ScriptVxWord x) { return ColorSetRed(rgba, x); }, (ScriptVxWord, ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorSetGreen(uint rgba, uint x)", asFUNCTIONPR([](ScriptVxWord rgba, ScriptVxWord x) { return ColorSetGreen(rgba, x); }, (ScriptVxWord, ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint ColorSetBlue(uint rgba, uint x)", asFUNCTIONPR([](ScriptVxWord rgba, ScriptVxWord x) { return ColorSetBlue(rgba, x); }, (ScriptVxWord, ScriptVxWord), ScriptVxWord), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 }
 
 // VxImageDescEx

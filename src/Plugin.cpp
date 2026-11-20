@@ -1,6 +1,8 @@
-﻿#include "CKAll.h"
+#include "CKAll.h"
 
+#if !CKAS_RUNTIME_SDL
 #include <windows.h>
+#endif
 
 #include <memory>
 #include <new>
@@ -39,12 +41,15 @@ static void EnsurePrototypeHook() {
     }
 }
 
+#if !CKAS_RUNTIME_SDL
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(instance);
     }
     return TRUE;
 }
+
+#endif
 
 CKERROR InitInstance(CKContext *context) {
     InitAngelScriptLogger();

@@ -1,3 +1,4 @@
+#include "ScriptEngineCompat.h"
 #include "ScriptCKDefines.h"
 
 #include <algorithm>
@@ -717,8 +718,8 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
 
     r = engine->RegisterGlobalFunction("int CKGetClassCount()", asFUNCTION(CKGetClassCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("CKClassDesc &CKGetClassDesc(CK_CLASSID cid)", asFUNCTION(CKGetClassDescChecked), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("string CKClassIDToString(CK_CLASSID cid)", asFUNCTIONPR([](CK_CLASSID cid) -> std::string { return ScriptStringify(CKClassIDToString(cid)); }, (CK_CLASSID), std::string), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("CK_CLASSID CKStringToClassID(const string &in className)", asFUNCTIONPR([](const std::string &className) { return CKStringToClassID(const_cast<CKSTRING>(className.c_str())); }, (const std::string &), CK_CLASSID), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("string CKClassIDToString(CK_CLASSID cid)", asFUNCTIONPR([](CK_CLASSID cid) -> std::string { return ScriptStringify(ScriptClassNameFromId(cid)); }, (CK_CLASSID), std::string), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("CK_CLASSID CKStringToClassID(const string &in className)", asFUNCTIONPR([](const std::string &className) { return ScriptClassIdFromName(className.c_str()); }, (const std::string &), CK_CLASSID), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("bool CKIsChildClassOf(CK_CLASSID child, CK_CLASSID parent)", asFUNCTIONPR([](CK_CLASSID child, CK_CLASSID parent) -> bool { return CKIsChildClassOf(child, parent); }, (CK_CLASSID, CK_CLASSID), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool CKIsChildClassOf(CKObject@ obj, CK_CLASSID parent)", asFUNCTIONPR([](CKObject *obj, CK_CLASSID parent) -> bool { return CKIsChildClassOf(obj, parent); }, (CKObject *, CK_CLASSID), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -1164,7 +1165,7 @@ static void ReleaseCKUICallbackString(CKSTRING value) {
         owned = g_CKUICallbackOwnedStrings.erase(value) > 0;
     }
     if (owned) {
-        CKDeletePointer(value);
+        CKDeletePointer(const_cast<char *>(value));
     }
 }
 
@@ -1256,8 +1257,16 @@ void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Reason", asOFFSET(CKUICallbackStruct, Reason)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Param3", asOFFSET(CKUICallbackStruct, Param3)); CKAS_CHECK_REGISTER(r);
 
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "uintptr_t get_Param1() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param1; }, (const CKUICallbackStruct *), uintptr_t), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "CKDWORD get_Param1() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param1; }, (const CKUICallbackStruct *), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#endif
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param1(uintptr_t value)", asFUNCTIONPR([](CKUICallbackStruct *self, uintptr_t value) { self->Param1 = value; }, (CKUICallbackStruct *, uintptr_t), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param1(CKDWORD value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKDWORD value) { self->Param1 = value; }, (CKUICallbackStruct *, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#endif
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "int get_NbObjectsLoaded() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->NbObjectsLoaded; }, (const CKUICallbackStruct *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -1270,8 +1279,16 @@ void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "bool get_DoBeep() const", asFUNCTIONPR([](const CKUICallbackStruct *self) -> bool { return self->DoBeep; }, (const CKUICallbackStruct *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_DoBeep(bool value)", asFUNCTIONPR([](CKUICallbackStruct *self, bool value) { self->DoBeep = value; }, (CKUICallbackStruct *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "uintptr_t get_Param2() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param2; }, (const CKUICallbackStruct *), uintptr_t), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "CKDWORD get_Param2() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param2; }, (const CKUICallbackStruct *), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#endif
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param2(uintptr_t value)", asFUNCTIONPR([](CKUICallbackStruct *self, uintptr_t value) { self->Param2 = value; }, (CKUICallbackStruct *, uintptr_t), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param2(CKDWORD value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKDWORD value) { self->Param2 = value; }, (CKUICallbackStruct *, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#endif
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "int get_NbObjectsToLoad() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->NbObjectsToLoad; }, (const CKUICallbackStruct *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -1514,7 +1531,7 @@ static void CopyCKEnumStructStorage(CKEnumStruct *self, const CKEnumStruct &othe
 
     self->NbData = other.NbData;
     self->Vals = new int[other.NbData];
-    self->Desc = new CKSTRING[other.NbData];
+    self->Desc = new char *[other.NbData];
     for (int i = 0; i < other.NbData; ++i) {
         self->Vals[i] = other.Vals ? other.Vals[i] : 0;
         self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
@@ -1640,7 +1657,7 @@ static void CopyCKFlagsStructStorage(CKFlagsStruct *self, const CKFlagsStruct &o
 
     self->NbData = other.NbData;
     self->Vals = new int[other.NbData];
-    self->Desc = new CKSTRING[other.NbData];
+    self->Desc = new char *[other.NbData];
     for (int i = 0; i < other.NbData; ++i) {
         self->Vals[i] = other.Vals ? other.Vals[i] : 0;
         self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
@@ -1766,7 +1783,7 @@ static void CopyCKStructStructStorage(CKStructStruct *self, const CKStructStruct
 
     self->NbData = other.NbData;
     self->Guids = new CKGUID[other.NbData];
-    self->Desc = new CKSTRING[other.NbData];
+    self->Desc = new char *[other.NbData];
     for (int i = 0; i < other.NbData; ++i) {
         self->Guids[i] = other.Guids ? other.Guids[i] : CKGUID();
         self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
@@ -2661,7 +2678,7 @@ static void ReleaseCKAttributeCategoryDescStorage(CKAttributeCategoryDesc *self)
         return;
     }
 
-    CKDeletePointer(self->Name);
+    CKDeletePointer(const_cast<char *>(self->Name));
     self->Name = nullptr;
 }
 
@@ -2779,7 +2796,7 @@ static CKSTRING DuplicateCKTimeProfilerString(const std::string &value, size_t m
 
 static void ReleaseCKTimeProfilerMarkStorage(CKTimeProfilerScriptState &state) {
     for (CKSTRING mark : state.Marks) {
-        CKDeletePointer(mark);
+        CKDeletePointer(const_cast<char *>(mark));
     }
     state.Marks.clear();
 }
@@ -2811,7 +2828,7 @@ static void ConstructCKTimeProfiler(const std::string &title,
     auto it = g_CKTimeProfilerStates.find(self);
     if (it != g_CKTimeProfilerStates.end()) {
         ReleaseCKTimeProfilerMarkStorage(it->second);
-        CKDeletePointer(it->second.Title);
+        CKDeletePointer(const_cast<char *>(it->second.Title));
         g_CKTimeProfilerStates.erase(it);
     }
     g_CKTimeProfilerStates.emplace(self, std::move(state));
@@ -2841,7 +2858,7 @@ static void DestructCKTimeProfiler(CKTimeProfiler *self) {
     }
 
     ReleaseCKTimeProfilerMarkStorage(state);
-    CKDeletePointer(state.Title);
+    CKDeletePointer(const_cast<char *>(state.Title));
 }
 
 static bool IsCKTimeProfilerConstructed(CKTimeProfiler *self) {
@@ -2885,7 +2902,7 @@ static void MarkCKTimeProfiler(CKTimeProfiler *self, const std::string &name) {
     if (it != g_CKTimeProfilerStates.end()) {
         it->second.Marks.push_back(markName);
     } else {
-        CKDeletePointer(markName);
+        CKDeletePointer(const_cast<char *>(markName));
     }
 }
 
@@ -3085,7 +3102,7 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "CKPARAMETER_DESC &opAssign(const CKPARAMETER_DESC &in other)", asMETHODPR(CKPARAMETER_DESC, operator=, (const CKPARAMETER_DESC &), CKPARAMETER_DESC &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "string get_Name() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> std::string { return ScriptStringify(self->Name); }, (const CKPARAMETER_DESC *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_Name(const string &in value)", asFUNCTIONPR([](CKPARAMETER_DESC *self, const std::string &value) { CKDeletePointer(self->Name); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKPARAMETER_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_Name(const string &in value)", asFUNCTIONPR([](CKPARAMETER_DESC *self, const std::string &value) { CKDeletePointer(const_cast<char *>(self->Name)); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKPARAMETER_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "string get_DefaultValueString() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> std::string { return ScriptStringify(self->DefaultValueString); }, (const CKPARAMETER_DESC *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_DefaultValueString(const string &in value)", asFUNCTIONPR([](CKPARAMETER_DESC *self, const std::string &value) { CKDeletePointer(self->DefaultValueString); self->DefaultValueString = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKPARAMETER_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -3124,7 +3141,7 @@ static void ReleaseCKBehaviorIoDescStorage(CKBEHAVIORIO_DESC *self) {
         return;
     }
 
-    CKDeletePointer(self->Name);
+    CKDeletePointer(const_cast<char *>(self->Name));
     self->Name = nullptr;
 }
 
@@ -3159,7 +3176,7 @@ static CKBEHAVIORIO_DESC &AssignCKBehaviorIoDesc(CKBEHAVIORIO_DESC *self, const 
         return *self;
     }
 
-    CKSTRING nameCopy = other.Name ? CKStrdup(other.Name) : nullptr;
+    char *nameCopy = other.Name ? CKStrdup(other.Name) : nullptr;
     ReleaseCKBehaviorIoDescStorage(self);
     self->Name = nameCopy;
     self->Flags = other.Flags;
@@ -3628,6 +3645,56 @@ void RegisterCKMovieInfo(asIScriptEngine *engine) {
 }
 
 // CKBitmapData
+#if CKAS_RUNTIME_SDL
+// A bitmap owns its slots, movie reader and save settings. Copy resources before
+// replacing the destination so failed allocation/loading leaves it unchanged.
+static CKBitmapData &AssignCKBitmapData(CKBitmapData *self, const CKBitmapData &other) {
+    if (self == &other) return *self;
+    CKBitmapData copy;
+    auto fail = [&]() -> CKBitmapData & {
+        if (auto *context = asGetActiveContext())
+            context->SetException("Unable to copy CKBitmapData resources.");
+        return *self;
+    };
+    if (other.m_MovieInfo) {
+        if (!copy.LoadMovieFile(other.m_MovieInfo->m_MovieFileName)) return fail();
+        if (other.m_CurrentSlot >= 0 && !copy.SetCurrentSlot(other.m_CurrentSlot)) return fail();
+    } else {
+        if (!copy.SetSlotCount(other.m_Slots.Size())) return fail();
+        for (int i = 0; i < other.m_Slots.Size(); ++i) {
+            const CKBitmapSlot *slot = other.m_Slots[i];
+            if (!slot) continue;
+            if (slot->m_DataBuffer) {
+                if (!copy.CreateImage(other.m_Width, other.m_Height, 32, i)) return fail();
+                std::memcpy(copy.m_Slots[i]->m_DataBuffer, slot->m_DataBuffer,
+                            size_t(other.m_Width) * size_t(other.m_Height) * sizeof(CKDWORD));
+            }
+            copy.m_Slots[i]->m_FileName = slot->m_FileName;
+        }
+        copy.m_Width = other.m_Width;
+        copy.m_Height = other.m_Height;
+        copy.m_CurrentSlot = other.m_CurrentSlot;
+    }
+    copy.SetSaveFormat(other.m_SaveProperties);
+    if (other.m_SaveProperties && !copy.m_SaveProperties) return fail();
+    copy.m_PickThreshold = other.m_PickThreshold;
+    copy.m_BitmapFlags = other.m_BitmapFlags;
+    copy.m_TransColor = other.m_TransColor;
+    copy.m_SaveOptions = other.m_SaveOptions;
+    copy.m_Slots.Swap(self->m_Slots);
+    using std::swap;
+    swap(copy.m_MovieInfo, self->m_MovieInfo);
+    swap(copy.m_Width, self->m_Width);
+    swap(copy.m_Height, self->m_Height);
+    swap(copy.m_CurrentSlot, self->m_CurrentSlot);
+    swap(copy.m_PickThreshold, self->m_PickThreshold);
+    swap(copy.m_BitmapFlags, self->m_BitmapFlags);
+    swap(copy.m_TransColor, self->m_TransColor);
+    swap(copy.m_SaveProperties, self->m_SaveProperties);
+    swap(copy.m_SaveOptions, self->m_SaveOptions);
+    return *self;
+}
+#endif
 
 void RegisterCKBitmapData(asIScriptEngine *engine) {
     int r = 0;
@@ -3646,11 +3713,19 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
 #else
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f(CKContext@ context)", asFUNCTIONPR([](CKBitmapData *self, CKContext *context) { new(self) CKBitmapData(context); }, (CKBitmapData *, CKContext *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 #endif
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f(const CKBitmapData &in other)", asFUNCTIONPR([](const CKBitmapData &data, CKBitmapData *self) { new(self) CKBitmapData(); AssignCKBitmapData(self, data); }, (const CKBitmapData &, CKBitmapData *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f(const CKBitmapData &in other)", asFUNCTIONPR([](const CKBitmapData &data, CKBitmapData *self) { new(self) CKBitmapData(data); }, (const CKBitmapData &, CKBitmapData *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+#endif
 
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBitmapData *self) { self->~CKBitmapData(); }, (CKBitmapData *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
+#if CKAS_RUNTIME_SDL
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapData &opAssign(const CKBitmapData &in other)", asFUNCTION(AssignCKBitmapData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#else
     r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapData &opAssign(const CKBitmapData &in other)", asMETHODPR(CKBitmapData, operator=, (const CKBitmapData &), CKBitmapData &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+#endif
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0)", asFUNCTIONPR([](CKBitmapData *self, int width, int height, int bpp, int slot) -> bool { return self->CreateImage(width, height, bpp, slot); }, (CKBitmapData *, int, int, int, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -5076,7 +5151,7 @@ void RegisterCKFileObject(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKFileObject", "void CleanData()", asMETHOD(CKFileObject, CleanData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKFileObject", "string get_Name() const", asFUNCTIONPR([](const CKFileObject *self) -> std::string { return ScriptStringify(self->Name); }, (const CKFileObject *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKFileObject", "void set_Name(const string &in value)", asFUNCTIONPR([](CKFileObject *self, const std::string &value) { CKDeletePointer(self->Name); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKFileObject *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFileObject", "void set_Name(const string &in value)", asFUNCTIONPR([](CKFileObject *self, const std::string &value) { CKDeletePointer(const_cast<char *>(self->Name)); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKFileObject *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKStateChunk
@@ -5108,11 +5183,11 @@ static int ReadCKStateChunkString(CKStateChunk *self, std::string &str) {
         return 0;
     }
 
-    CKSTRING buffer = nullptr;
+    char *buffer = nullptr;
     const int result = self->ReadString(&buffer);
     if (buffer) {
         str = buffer;
-        CKDeletePointer(buffer);
+        CKDeletePointer(const_cast<char *>(buffer));
     } else {
         str.clear();
     }
