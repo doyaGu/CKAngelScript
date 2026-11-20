@@ -1,6 +1,7 @@
 # CKAngelScript
 
-CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as `AngelScript.dll`, installs into `BuildingBlocks`, and provides:
+CKAngelScript integrates AngelScript into CK2. This branch builds the SDL plugin
+for NeMo2 and installs it into `BuildingBlocks`. It provides:
 
 - Full low-level CK/Vx SDK bindings for scripts that need direct engine access.
 - `AngelScript Component`, a Building Block that attaches a script class to a behavior instance.
@@ -8,10 +9,9 @@ CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as
 - High-level `Scene`, `Behavior`/`BB`, `Param`, `Message`, and `Async` APIs.
 - Optional DynCall-backed native FFI helpers for advanced integrations.
 
-Game-specific packages and Player automation are maintained outside this core
-repository. The Ballance port lives in the sibling `CKAngelScript-Ballance`
-project and consumes this project through its public runtime and validation
-surface.
+The `main` branch builds the plugin for original Virtools. The SDL plugin uses
+the same CK2, VxMath, and SDL libraries as its host. BML+ can build it as a
+CMake subproject or run with a matching prebuilt plugin.
 
 ## Documentation Map
 
@@ -34,75 +34,29 @@ surface.
 
 ## Quick Build
 
-Prerequisites:
+Install CMake 3.25+, a C++20 compiler, and the CK2/VxMath packages exported by the
+NeMo2 revision pinned by your Player. Use the matching SDL3 development package.
 
-- Windows with Visual Studio 2022.
-- Virtools SDK 2.1 or newer.
-- DynCall libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
-- AngelScript source under `deps/angelscript`; if it is missing, CMake downloads the SDK from AngelCode.
-
-For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.38.0.zip`.
-
-```powershell
+```sh
 git submodule update --init --recursive
-
-cmake -B build -G "Visual Studio 17 2022" -A Win32 `
-  -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
-  -DCKAS_ENABLE_DYNCALL=ON `
-  -DDYNCALL_ROOT=C:\Path\To\dyncall `
-  -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
-  -DDYNLOAD_ROOT=C:\Path\To\dyncall `
-  -DCKAS_BUILD_CORE_TESTS=ON `
-  -DCKAS_BUILD_SELF_TESTS=ON
-
-cmake --build build --config Release
-ctest --test-dir build --build-config Release --output-on-failure
-Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
+cmake -S . -B build/sdl -DCMAKE_BUILD_TYPE=Release -DCKAS_RUNTIME=sdl \
+  -DCMAKE_PREFIX_PATH="/path/to/engine-sdk;/path/to/SDL-prefix"
+cmake --build build/sdl --config Release
+ctest --test-dir build/sdl -C Release --output-on-failure
+cmake --install build/sdl --config Release --prefix /path/to/stage
 ```
 
-`CKAS_BUILD_CORE_TESTS` builds a normal executable for lifecycle, runtime metadata,
-and dependency resolution tests; it does not require Virtools Player. DLL startup
-self-tests remain controlled separately by `CKAS_BUILD_SELF_TESTS`.
+For a Visual Studio generator, select the Player architecture with
+`-A Win32`, `-A x64`, or `-A ARM64`. Use a separate build tree per target.
+For an offline build, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.38.0.zip`.
 
-To add an engine-backed CTest against an original Virtools installation, configure
-with `-DCKAS_ENGINE_TEST_RUNTIME_DIR=C:\Path\To\Ballance\Bin`. The test builds with
-the Virtools SDK import libraries, loads `CK2.dll` and `VxMath.dll` only from that
-runtime directory, registers the built plugin, and verifies the real reset,
-object-deletion, and clear-all manager callback seams.
+The stage contains the plugin under `BuildingBlocks` and the development
+headers under `include`. Copy the plugin into the matching Player installation.
+Build a ZIP from the standalone stage with
+`cpack --config build/sdl/CPackConfig.cmake -C Release`.
 
-To create a distributable ZIP:
-
-```powershell
-cmake --build build --config Release --target PACKAGE
-```
-
-The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
-
-To generate the optional AngelScript API reference, first export the live
-`asIScriptEngine` API JSON from a host integration. Then provide that JSON and
-Natural Docs to the host-neutral `docs-api` target. The target applies the
-curated metadata in `docs\api-reference.yml`, writes a quality report to
-`build\docs\api-quality.json`, and writes HTML under `build\docs\api`.
-
-```powershell
-cmake -B build -G "Visual Studio 17 2022" -A Win32 `
-  -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
-  -DCKAS_BUILD_SELF_TESTS=ON `
-  -DCKAS_ENABLE_API_EXPORT=ON `
-  -DCKAS_BUILD_API_DOCS=ON `
-  -DCKAS_SCRIPT_API_JSON_INPUT=C:\Path\To\script-api.json `
-  -DCKAS_NATURALDOCS_EXECUTABLE=C:\Path\To\NaturalDocs.exe
-
-cmake --build build --config Release --target docs-api
-```
-
-If `build\docs\api\index.html` exists when packaging runs, CPack installs the generated reference under `share\doc\CKAngelScript\api`.
-
-For the repeatable local path:
-
-```powershell
-tools\Validate-Local.ps1 -BuildDir build -Configuration Release
-```
+See [Getting Started](docs/getting-started.md) for installed paths, tests and
+optional features.
 
 ## First Runtime Script
 
