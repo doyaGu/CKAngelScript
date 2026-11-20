@@ -91,6 +91,36 @@ endfunction()
 ckas_prepare_angelscript()
 
 add_subdirectory(angelscript/angelscript/projects/cmake EXCLUDE_FROM_ALL)
+
+# AngelScript 2.38 counts a large, nontrivial argument as several registers
+# when deciding if it fits, then passes only its address. In calls with more
+# than one such argument that sends the second address to the wrong place.
+# Apple ARM64 also needs pointer-sized stack slots for spilled references.
+# Build the fixes in the binary tree without editing the SDK source.
+get_target_property(_ckas_as_sources angelscript SOURCES)
+set(_ckas_arm64_source "../../source/as_callfunc_arm64.cpp")
+if(_ckas_arm64_source IN_LIST _ckas_as_sources)
+    set(_ckas_arm64_file "${CKAS_ANGELSCRIPT_ROOT}/angelscript/source/as_callfunc_arm64.cpp")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_ckas_arm64_file}")
+    file(READ "${_ckas_arm64_file}" _ckas_arm64_code)
+    string(REPLACE "const bool passedAsPointer = parmQWords <= 2;"
+        "const bool passedAsPointer = (parmTypeInfo->flags & COMPLEX_MASK) != 0;"
+        _ckas_arm64_patched_code "${_ckas_arm64_code}")
+    string(REPLACE
+        "asUINT parmBytes = parmType.GetSizeInMemoryBytes();
+				PadAppleStack(argsArray, numArgs, stackDispositionBytes, parmBytes);"
+        "asUINT parmBytes = parmType.IsReference() ? AS_PTR_SIZE * 4 : parmType.GetSizeInMemoryBytes();
+				PadAppleStack(argsArray, numArgs, stackDispositionBytes, parmBytes);"
+        _ckas_arm64_patched_code "${_ckas_arm64_patched_code}")
+    if(NOT _ckas_arm64_patched_code STREQUAL _ckas_arm64_code)
+        set(_ckas_arm64_patched "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_arm64.cpp")
+        file(CONFIGURE OUTPUT "${_ckas_arm64_patched}" CONTENT "${_ckas_arm64_patched_code}" @ONLY)
+        list(TRANSFORM _ckas_as_sources REPLACE "^\\.\\./\\.\\./source/as_callfunc_arm64\\.cpp$"
+            "${_ckas_arm64_patched}")
+        set_property(TARGET angelscript PROPERTY SOURCES "${_ckas_as_sources}")
+        target_include_directories(angelscript PRIVATE "${CKAS_ANGELSCRIPT_ROOT}/angelscript/source")
+    endif()
+endif()
 target_include_directories(angelscript INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>)
 
