@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstring>
 #include <limits.h>
+#include <memory>
+#include <new>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -3083,6 +3085,60 @@ static bool SetCKParameterDescDefaultValueBuffer(CKPARAMETER_DESC *self, NativeB
     return true;
 }
 
+static CKPARAMETER_DESC &AssignCKParameterDesc(CKPARAMETER_DESC *self, const CKPARAMETER_DESC &other) {
+#if CKAS_RUNTIME_SDL
+    return *self = other;
+#else
+    if (self == &other)
+        return *self;
+
+    using String = std::unique_ptr<char, decltype(&CKDeletePointer)>;
+    String name(other.Name ? CKStrdup(other.Name) : nullptr, CKDeletePointer);
+    String text(other.DefaultValueString ? CKStrdup(other.DefaultValueString) : nullptr,
+                CKDeletePointer);
+    const int size = other.DefaultValue ? std::max(0, other.DefaultValueSize) : 0;
+    std::unique_ptr<CKBYTE[]> value(size ? new (std::nothrow) CKBYTE[size] : nullptr);
+    if ((other.Name && !name) || (other.DefaultValueString && !text) || (size && !value)) {
+        if (auto *context = asGetActiveContext())
+            context->SetException("Could not copy CKPARAMETER_DESC.");
+        return *self;
+    }
+    if (size)
+        std::memcpy(value.get(), other.DefaultValue, size);
+
+    CKDeletePointer(self->Name);
+    CKDeletePointer(self->DefaultValueString);
+    ClearCKParameterDescDefaultValue(self);
+    self->Name = name.release();
+    self->DefaultValueString = text.release();
+    self->DefaultValue = value.release();
+    self->DefaultValueSize = size;
+    self->Guid = other.Guid;
+    self->Type = other.Type;
+    self->Owner = other.Owner;
+    return *self;
+#endif
+}
+
+static void ConstructCKParameterDescCopy(const CKPARAMETER_DESC &other, CKPARAMETER_DESC *self) {
+#if CKAS_RUNTIME_SDL
+    new (self) CKPARAMETER_DESC(other);
+#else
+    // The Virtools 2.1 SDK's implicit copy aliases DefaultValue even though
+    // its destructor deletes the buffer.
+    new (self) CKPARAMETER_DESC();
+    AssignCKParameterDesc(self, other);
+#endif
+}
+
+static void DestructCKParameterDesc(CKPARAMETER_DESC *self) {
+#if !CKAS_RUNTIME_SDL
+    CKDeletePointer(self->Name);
+    CKDeletePointer(self->DefaultValueString);
+#endif
+    self->~CKPARAMETER_DESC();
+}
+
 void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3095,11 +3151,11 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "int Owner", asOFFSET(CKPARAMETER_DESC, Owner)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPARAMETER_DESC *self) { new(self) CKPARAMETER_DESC(); }, (CKPARAMETER_DESC*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_CONSTRUCT, "void f(const CKPARAMETER_DESC &in other)", asFUNCTIONPR([](const CKPARAMETER_DESC &desc, CKPARAMETER_DESC *self) { new(self) CKPARAMETER_DESC(desc); }, (const CKPARAMETER_DESC &, CKPARAMETER_DESC *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_CONSTRUCT, "void f(const CKPARAMETER_DESC &in other)", asFUNCTION(ConstructCKParameterDescCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPARAMETER_DESC *self) { self->~CKPARAMETER_DESC(); }, (CKPARAMETER_DESC *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKParameterDesc), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "CKPARAMETER_DESC &opAssign(const CKPARAMETER_DESC &in other)", asMETHODPR(CKPARAMETER_DESC, operator=, (const CKPARAMETER_DESC &), CKPARAMETER_DESC &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "CKPARAMETER_DESC &opAssign(const CKPARAMETER_DESC &in other)", asFUNCTION(AssignCKParameterDesc), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "string get_Name() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> std::string { return ScriptStringify(self->Name); }, (const CKPARAMETER_DESC *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_Name(const string &in value)", asFUNCTIONPR([](CKPARAMETER_DESC *self, const std::string &value) { CKDeletePointer(const_cast<char *>(self->Name)); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKPARAMETER_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
