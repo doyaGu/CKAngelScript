@@ -211,7 +211,11 @@ if(NOT WIN32)
     list(REMOVE_ITEM CKAS_SOURCES AngelScript.rc)
 endif()
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
-set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
+set_target_properties(CKAngelScript PROPERTIES
+        OUTPUT_NAME "AngelScript"
+        CKAS_RUNTIME "${CKAS_RUNTIME}"
+        CKAS_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include"
+        CKAS_ANGELSCRIPT_INCLUDE_DIR "${CKAS_ANGELSCRIPT_ROOT}/angelscript/include")
 
 target_compile_definitions(CKAngelScript PRIVATE
         CKAS_BUILDING_DLL
