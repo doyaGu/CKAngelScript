@@ -52,6 +52,7 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (!(xstr < \"abacb\")) return 860;\n"
         "  if (!xstr.Contains(XString(\"ba\"))) return 861;\n"
         "  if (xstr.RFind(97) != 4) return 862;\n"
+        "  if (xstr.RFind(97, 60000) != 4 || xstr.RFind(97, 2) != 2 || xstr.RFind(88) != 65535) return 867;\n"
         "  if (xstr.Find(97) != 0) return 863;\n"
         "  if (xstr[1] != 98) return 864;\n"
         "  xstr[1] = 90;\n"
