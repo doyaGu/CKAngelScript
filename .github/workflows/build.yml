@@ -116,6 +116,7 @@ jobs:
           $env:CXX = "cl"
           cmake -G Ninja -B "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}" `
             -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
+            -DCKAS_RUNTIME=virtools `
             -DCKAS_BUILD_CORE_TESTS=ON `
             -DCKAS_BUILD_SELF_TESTS=ON `
             -DCKAS_ENABLE_DYNCALL=ON `

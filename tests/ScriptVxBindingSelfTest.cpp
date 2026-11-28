@@ -8,13 +8,31 @@
 
 #include <angelscript.h>
 
+#include "CKAngelScript.h"
 #include "ScriptNativePointer.h"
+
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 
 static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "Vx binding self-test requires an AngelScript engine.";
         return false;
     }
+
+#ifdef _WIN32
+    std::string libraryPath = "kernel32.dll";
+    std::string symbolName = "GetTickCount";
+#else
+    Dl_info library{};
+    if (!dladdr(reinterpret_cast<const void *>(&CKAngelScriptGetApiVersion), &library) || !library.dli_fname) {
+        error = "Vx binding self-test could not locate the plugin library.";
+        return false;
+    }
+    std::string libraryPath = library.dli_fname;
+    std::string symbolName = "CKAngelScriptGetApiVersion";
+#endif
 
     constexpr const char *moduleName = "__CKAS_VxBindingSelfTest";
     const char *source =
@@ -28,12 +46,13 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (dev !is null || mat !is null || stage != 3 || argument.IsNull()) return VXEFFECTRETVAL_SKIPALL;\n"
         "  return VXEFFECTRETVAL_SKIPNONE;\n"
         "}\n"
-        "int Run() {\n"
+        "int Run(const string &in libraryPath, const string &in symbolName) {\n"
         "  XString xstr(\"abaca\");\n"
         "  if (!(xstr < XString(\"abacb\"))) return 859;\n"
         "  if (!(xstr < \"abacb\")) return 860;\n"
         "  if (!xstr.Contains(XString(\"ba\"))) return 861;\n"
-        "  if (xstr.RFind(97) != 2) return 862;\n"
+        "  if (xstr.RFind(97) != 4) return 862;\n"
+        "  if (xstr.RFind(97, 60000) != 4 || xstr.RFind(97, 2) != 2 || xstr.RFind(88) != 65535) return 867;\n"
         "  if (xstr.Find(97) != 0) return 863;\n"
         "  if (xstr[1] != 98) return 864;\n"
         "  xstr[1] = 90;\n"
@@ -607,14 +626,14 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (assignedTimeProfiler.Current() < 0.0f) return 882;\n"
 #endif
         "  VxSharedLibrary missingLibrary;\n"
-        "  if (missingLibrary.Load(\"__ckas_missing_vx_shared_library_smoke_78d3c1f0__.dll\") != 0) return 890;\n"
+        "  if (missingLibrary.Load(\"__ckas_missing_vx_shared_library_smoke_78d3c1f0__\") != 0) return 890;\n"
         "  missingLibrary.Attach(0);\n"
         "  missingLibrary.ReleaseLibrary();\n"
         "  VxSharedLibrary sharedLibrary;\n"
-        "  INSTANCE_HANDLE kernel32 = sharedLibrary.Load(\"kernel32.dll\");\n"
-        "  if (kernel32 == 0) return 891;\n"
-        "  FUNC_PTR getTickCount = sharedLibrary.GetFunctionPtr(\"GetTickCount\");\n"
-        "  if (getTickCount == 0) return 892;\n"
+        "  INSTANCE_HANDLE handle = sharedLibrary.Load(libraryPath);\n"
+        "  if (handle == 0) return 891;\n"
+        "  FUNC_PTR symbol = sharedLibrary.GetFunctionPtr(symbolName);\n"
+        "  if (symbol == 0) return 892;\n"
         "  sharedLibrary.ReleaseLibrary();\n"
         "  VxOBB obb(box, identity);\n"
         "  if (obb.GetCenter().x != 1.0f || obb.GetCenter().y != 2.0f || obb.GetCenter().z != 3.0f) return 86;\n"
@@ -734,7 +753,7 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         engine->DiscardModule(moduleName);
         return false;
     }
-    asIScriptFunction *function = module->GetFunctionByDecl("int Run()");
+    asIScriptFunction *function = module->GetFunctionByDecl("int Run(const string &in, const string &in)");
     if (!function) {
         error = "Vx binding self-test script entry point is unavailable.";
         engine->DiscardModule(moduleName);
@@ -748,6 +767,12 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         return false;
     }
     r = context->Prepare(function);
+    if (r >= 0) {
+        r = context->SetArgObject(0, &libraryPath);
+    }
+    if (r >= 0) {
+        r = context->SetArgObject(1, &symbolName);
+    }
     if (r >= 0) {
         r = context->Execute();
     }

@@ -1,3 +1,4 @@
+#include "ScriptEngineCompat.h"
 #include "ScriptCKManagers.h"
 
 #include <cstring>
@@ -16,6 +17,8 @@
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
+
+#undef SendMessage
 
 static void SetActiveScriptException(const char *message) {
     if (asIScriptContext *ctx = asGetActiveContext()) {

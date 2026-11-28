@@ -3,7 +3,9 @@
 #include <string>
 #include <vector>
 
+#if !CKAS_RUNTIME_SDL
 #include <windows.h>
+#endif
 
 #include "CKAll.h"
 #include "CKAngelScript.h"
@@ -42,20 +44,27 @@ struct PublicApiSymbols {
     decltype(&CKAngelScriptBorrowExecutionResult) BorrowExecutionResult = nullptr;
 
     bool Resolve(const char *pluginPath, std::string &error) {
-        std::string moduleName = pluginPath ? pluginPath : "";
-        const std::string::size_type separator = moduleName.find_last_of("\\/");
-        if (separator != std::string::npos) {
-            moduleName.erase(0, separator + 1);
-        }
-
-        HMODULE module = moduleName.empty() ? nullptr : GetModuleHandleA(moduleName.c_str());
+#if CKAS_RUNTIME_SDL
+        auto *plugins = CKGetPluginManager();
+        auto *module = plugins ? plugins->GetPluginDllInfo(pluginPath) : nullptr;
+#else
+        const std::string path = pluginPath ? pluginPath : "";
+        const auto separator = path.find_last_of("\\/");
+        const auto name = path.substr(separator == std::string::npos ? 0 : separator + 1);
+        const auto module = name.empty() ? nullptr : GetModuleHandleA(name.c_str());
+#endif
         if (!module) {
             error = "Could not find the CKAngelScript module loaded by CKPluginManager.";
             return false;
         }
 
+#if CKAS_RUNTIME_SDL
+#define CKAS_FIND_SYMBOL(module, name) (module)->GetFunctionPtr(name)
+#else
+#define CKAS_FIND_SYMBOL(module, name) GetProcAddress(module, name)
+#endif
 #define CKAS_RESOLVE_SYMBOL(Member, Symbol)                                                        \
-    Member = reinterpret_cast<decltype(Member)>(GetProcAddress(module, #Symbol));                  \
+    Member = reinterpret_cast<decltype(Member)>(CKAS_FIND_SYMBOL(module, #Symbol));                  \
     if (!Member) {                                                                                 \
         error = "CKAngelScript plugin is missing public ABI symbol " #Symbol ".";                 \
         return false;                                                                              \
@@ -80,6 +89,7 @@ struct PublicApiSymbols {
         CKAS_RESOLVE_SYMBOL(BorrowExecutionResult, CKAngelScriptBorrowExecutionResult)
 
 #undef CKAS_RESOLVE_SYMBOL
+#undef CKAS_FIND_SYMBOL
         return true;
     }
 };

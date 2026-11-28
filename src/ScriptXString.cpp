@@ -1,11 +1,27 @@
 #include "ScriptXString.h"
 
+#include <algorithm>
 #include <cassert>
 #include <string>
 #include <unordered_map>
 
 #include "XString.h"
 #include "ScriptRegistration.h"
+
+namespace {
+XWORD XStringReverseFind(const XString *string, char character, XWORD start) {
+    const auto length = static_cast<std::size_t>(string->Length());
+    if (length == 0)
+        return XString::NOTFOUND;
+
+    const char *data = string->CStr();
+    for (auto end = std::min<std::size_t>(start, length - 1) + 1; end > 0; --end) {
+        if (data[end - 1] == character)
+            return static_cast<XWORD>(end - 1);
+    }
+    return XString::NOTFOUND;
+}
+}
 
 namespace std {
     // BKDR hash function for XString
@@ -315,7 +331,7 @@ void RegisterXString(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8 c, uint16 start = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in str, uint16 start = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 65535) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 65535) const", asFUNCTION(XStringReverseFind), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString Substring(uint16 start, uint16 length = 0) const", asMETHODPR(XString, Substring, (XWORD, XWORD) const, XString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &Crop(uint16 start, uint16 length)", asMETHODPR(XString, Crop, (XWORD, XWORD), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &Cut(uint16 start, uint16 length)", asMETHODPR(XString, Cut, (XWORD, XWORD), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

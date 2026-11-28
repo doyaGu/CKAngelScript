@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 
 #include <angelscript.h>
 
@@ -14,6 +15,10 @@ public:
 
     NativePointer() = default;
     NativePointer(void *ptr) { m_Ptr = static_cast<char *>(ptr); }
+#if CKAS_RUNTIME_SDL
+    template<class Function> requires std::is_function_v<Function>
+    NativePointer(Function *ptr) : NativePointer(reinterpret_cast<uintptr_t>(ptr)) {}
+#endif
     NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
     NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
     NativePointer(void *ptr, void *owner, OwnerRetainFn retainOwner, OwnerReleaseFn releaseOwner) {

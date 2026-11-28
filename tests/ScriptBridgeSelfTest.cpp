@@ -947,6 +947,14 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     return ok;
 }
 
+static bool IsSelfTestObjectDestroyed(CKContext *context, CK_ID id) {
+    if (!id) {
+        return false;
+    }
+    CKObject *object = CKGetObject(context, id);
+    return !object || object->IsToBeDeleted();
+}
+
 static void DestroySelfTestObject(CKContext *context, CKObject *object) {
     if (context && object && !object->IsToBeDeleted()) {
         context->DestroyObject(object);
@@ -1442,6 +1450,7 @@ static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
                                error = "Mixed link replacement self-test could not create replacement source.";
                                return false;
                            }
+                           const CK_ID installedOperationId = installedOperation->GetID();
                            const bool accepted = throughConfig
                                ? [&]() {
                                      BBConfig *returnedConfig = config->SourceSlot(pin, sourceRef);
@@ -1453,7 +1462,7 @@ static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
                                  }()
                                : instance->SourceSlot(pin, sourceRef);
                            sourceRef->Release();
-                           const bool ok = accepted && targetPin->GetDirectSource() == source && installedOperation->IsToBeDeleted();
+                           const bool ok = accepted && targetPin->GetDirectSource() == source && IsSelfTestObjectDestroyed(context, installedOperationId);
                            DestroySelfTestObject(context, source);
                            if (!ok) {
                                error = fmt::format("{} mixed link replacement did not detached-destroy old operation when replacing it with a source.",
@@ -1515,6 +1524,7 @@ static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
                                return false;
                            }
 
+                           const CK_ID installedOperationId = installedOperation->GetID();
                            const bool accepted = throughConfig
                                ? [&]() {
                                      BBConfig *returnedConfig = config->SetSlotInt(pin, 42);
@@ -1528,8 +1538,8 @@ static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
                            CKParameter *valueSource = targetPin->GetDirectSource();
                            if (!accepted ||
                                !valueSource ||
-                               CKParameterOperation::Cast(valueSource->GetOwner()) == installedOperation ||
-                               !installedOperation->IsToBeDeleted()) {
+                               (valueSource->GetOwner() && valueSource->GetOwner()->GetID() == installedOperationId) ||
+                               !IsSelfTestObjectDestroyed(context, installedOperationId)) {
                                error = fmt::format("{} mixed link replacement did not clear old operation on value write.",
                                                    throughConfig ? "BBConfig" : "BBInstance");
                                return false;
@@ -2804,7 +2814,8 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     ParamOperationRef *graphEditOperation = graphEditOperationGuid.IsValid()
         ? ConnectOperationToInput(bridge, target, 0, graphEditOperationRequest, graphEditOperationError, true, nullptr)
         : nullptr;
-    CKParameterOperation *graphEditOperationObject = graphEditOperation ? graphEditOperation->Get() : nullptr;
+    const CK_ID graphEditOperationId = graphEditOperation && graphEditOperation->Get()
+        ? graphEditOperation->GetID() : 0;
     BehaviorGraphEdit *replaceOperationSourceEdit = graph->Edit();
     GraphEditNode *replaceOperationSourceTarget = replaceOperationSourceEdit->Import(targetNode);
     if (graphEditReplacementRef) {
@@ -2814,16 +2825,15 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     if (!graphEditReplacementSource ||
         !graphEditReplacementRef ||
         !graphEditOperation ||
-        !graphEditOperationObject ||
         !replaceOperationSourceResult ||
         !replaceOperationSourceResult->Ok() ||
         targetValue->GetDirectSource() != graphEditReplacementSource ||
-        !graphEditOperationObject->IsToBeDeleted()) {
+        !IsSelfTestObjectDestroyed(context, graphEditOperationId)) {
         error = fmt::format("Graph edit self-test failed operation replacement cleanup: op={} apply={} source={} deleted={}.",
-                            graphEditOperation ? (graphEditOperationObject ? "ok" : "missing") : graphEditOperationError,
+                            graphEditOperation ? (graphEditOperationId ? "ok" : "missing") : graphEditOperationError,
                             replaceOperationSourceResult && replaceOperationSourceResult->Ok() ? "ok" : (replaceOperationSourceResult ? replaceOperationSourceResult->Error() : "<null>"),
                             targetValue && targetValue->GetDirectSource() == graphEditReplacementSource ? "ok" : "wrong",
-                            graphEditOperationObject && graphEditOperationObject->IsToBeDeleted() ? "true" : "false");
+                            IsSelfTestObjectDestroyed(context, graphEditOperationId) ? "true" : "false");
         if (replaceOperationSourceResult) replaceOperationSourceResult->Release();
         replaceOperationSourceTarget->Release();
         replaceOperationSourceEdit->Release();

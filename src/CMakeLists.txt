@@ -207,6 +207,9 @@ if (CKAS_ENABLE_API_EXPORT)
     )
 endif ()
 
+if(NOT WIN32)
+    list(REMOVE_ITEM CKAS_SOURCES AngelScript.rc)
+endif()
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
 set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
 
@@ -232,11 +235,25 @@ if (CKAS_BUILD_SELF_TESTS)
     )
 endif ()
 
+if(APPLE)
+    set_target_properties(CKAngelScript PROPERTIES INSTALL_RPATH "@loader_path;@loader_path/../Bin")
+elseif(UNIX)
+    set_target_properties(CKAngelScript PROPERTIES INSTALL_RPATH "$ORIGIN;$ORIGIN/../Bin")
+endif()
+
 target_link_libraries(CKAngelScript PRIVATE
         CK2 VxMath
         angelscript angelscript_addon
         fmt::fmt
 )
+
+if(CKAS_RUNTIME_SDL)
+    target_link_libraries(CKAngelScript PRIVATE SDL3::SDL3)
+endif()
+
+if (CKAS_BUILD_SELF_TESTS AND CMAKE_DL_LIBS)
+    target_link_libraries(CKAngelScript PRIVATE ${CMAKE_DL_LIBS})
+endif ()
 
 if (CKAS_ENABLE_DYNCALL)
     target_include_directories(CKAngelScript PRIVATE
@@ -254,7 +271,9 @@ endif ()
 
 if (NOT SKIP_INSTALL_ALL)
     install(TARGETS CKAngelScript
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION BuildingBlocks
+            LIBRARY DESTINATION BuildingBlocks
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
 
     if (NOT SKIP_INSTALL_HEADERS)

@@ -23,15 +23,7 @@ set_target_properties(CKAngelScriptCoreTests PROPERTIES
 
 add_test(NAME CKAngelScript.Core COMMAND CKAngelScriptCoreTests)
 
-if (CKAS_ENGINE_TEST_RUNTIME_DIR)
-    foreach (_ckas_runtime_dll CK2.dll VxMath.dll)
-        if (NOT EXISTS "${CKAS_ENGINE_TEST_RUNTIME_DIR}/${_ckas_runtime_dll}")
-            message(FATAL_ERROR
-                    "CKAS_ENGINE_TEST_RUNTIME_DIR is missing ${_ckas_runtime_dll}: "
-                    "${CKAS_ENGINE_TEST_RUNTIME_DIR}")
-        endif ()
-    endforeach ()
-
+if(CKAS_RUNTIME_SDL OR CKAS_ENGINE_TEST_RUNTIME_DIR)
     add_executable(CKAngelScriptEngineTests
             ScriptEngineIntegrationTest.cpp
             "${PROJECT_SOURCE_DIR}/src/ScriptObjectIdentity.cpp"
@@ -45,10 +37,16 @@ if (CKAS_ENGINE_TEST_RUNTIME_DIR)
     add_dependencies(CKAngelScriptEngineTests CKAngelScript)
     set_target_properties(CKAngelScriptEngineTests PROPERTIES FOLDER "Tests")
 
-    add_test(NAME CKAngelScript.Engine
-            COMMAND ${CMAKE_COMMAND} -E env
-            "PATH=${CKAS_ENGINE_TEST_RUNTIME_DIR};$ENV{PATH}"
-            "CKAS_DISABLE_CK2_PROTOTYPE_HOOK=1"
-            $<TARGET_FILE:CKAngelScriptEngineTests>
-            $<TARGET_FILE:CKAngelScript>)
-endif ()
+    add_test(NAME CKAngelScript.Engine COMMAND CKAngelScriptEngineTests $<TARGET_FILE:CKAngelScript>)
+    if(WIN32 AND CKAS_RUNTIME_SDL)
+        set_property(TEST CKAngelScript.Engine PROPERTY ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:CK2>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:VxMath>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:SDL3::SDL3>")
+    elseif(WIN32)
+        set_property(TEST CKAngelScript.Engine PROPERTY ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${CKAS_ENGINE_TEST_RUNTIME_DIR}")
+        set_property(TEST CKAngelScript.Engine PROPERTY ENVIRONMENT
+            "CKAS_DISABLE_CK2_PROTOTYPE_HOOK=1")
+    endif()
+endif()

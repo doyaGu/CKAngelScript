@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "version": "@PROJECT_VERSION@",
+  "runtime": "@CKAS_RUNTIME@",
+  "platform": "@_ckas_platform@",
+  "architecture": "@_ckas_arch@",
+  "host_linkage": "dynamic",
+  "angelscript_version": "@CKAS_ANGELSCRIPT_VERSION@"
+}

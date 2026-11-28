@@ -7,10 +7,12 @@
 #include <mutex>
 #include <vector>
 
+#if !CKAS_RUNTIME_SDL
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <tlhelp32.h>
+#endif
 
 bool ParseCKASEnvironmentFlag(const char *value) {
     if (!value) {
@@ -42,6 +44,15 @@ bool ParseCKASEnvironmentFlag(const char *value) {
     return equals("1") || equals("true") || equals("yes") || equals("on");
 }
 
+#if CKAS_RUNTIME_SDL
+// SDL CK2 implements runtime prototype construction directly.
+bool InstallCKBehaviorPrototypeRuntimeHook(std::string *error) {
+    if (error) error->clear();
+    return true;
+}
+void UninstallCKBehaviorPrototypeRuntimeHook() {}
+bool IsCKBehaviorPrototypeRuntimeHookInstalled() { return false; }
+#else
 namespace {
 
 constexpr const char *kCK2ModuleName = "CK2.dll";
@@ -392,3 +403,5 @@ bool IsCKBehaviorPrototypeRuntimeHookInstalled() {
     return ResolvePrototypeExports(&runtimePrototype, &normalPrototype, nullptr) &&
            RuntimePrototypeRedirectsToNormal(runtimePrototype, normalPrototype);
 }
+
+#endif // CKAS_RUNTIME_SDL

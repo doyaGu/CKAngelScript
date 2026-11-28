@@ -8,7 +8,7 @@
 #  VirtoolsSDK::VxMath      - Imported library of VxMath
 
 find_path(VIRTOOLS_SDK_INCLUDE_DIR CKAll.h
-        HINTS $ENV{VIRTOOLS_SDK_PATH} ${VIRTOOLS_SDK_PATH}
+        HINTS ${VIRTOOLS_SDK_PATH} $ENV{VIRTOOLS_SDK_PATH}
         PATH_SUFFIXES Include Includes
         DOC "Where the Virtools SDK headers can be found"
         )
@@ -18,7 +18,7 @@ set(VIRTOOLS_SDK_LIBRARY_NAMES CK2 VxMath)
 set(VIRTOOLS_SDK_LIBRARIES)
 foreach (LIBNAME IN LISTS VIRTOOLS_SDK_LIBRARY_NAMES)
     find_library(VIRTOOLS_SDK_${LIBNAME} NAMES ${LIBNAME}
-            HINTS $ENV{VIRTOOLS_SDK_PATH} ${VIRTOOLS_SDK_PATH}
+            HINTS ${VIRTOOLS_SDK_PATH} $ENV{VIRTOOLS_SDK_PATH}
             PATH_SUFFIXES Lib
             DOC "Where the Virtools SDK libraries can be found"
             )

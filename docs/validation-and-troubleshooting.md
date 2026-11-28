@@ -8,16 +8,21 @@ host integration projects.
 
 ### Local Build
 
-```powershell
-tools\Validate-Local.ps1 -BuildDir build -Configuration Release
+Configure the SDL build as described in [Getting Started](getting-started.md).
+Build and run its tests against the same NeMo2 packages used by Player:
+
+```sh
+cmake --build build/sdl --config Release
+ctest --test-dir build/sdl -C Release --output-on-failure
 ```
 
-Useful options:
-
-| Option | Meaning |
-| --- | --- |
-| `-NoSelfTests` | Configure without startup self-test sources. |
-| `-ScriptRoot <path>` | Run static script entry validation after the build. |
+`CKAngelScript.Engine` loads the plugin through CK2 and exercises manager
+callbacks in a real CK context. For the startup self-tests in Player, build
+with `CKAS_BUILD_SELF_TESTS=ON` and set `CKAS_SELFTEST_MARKER` to an absolute
+output path before launching a disposable Player installation. Set
+`CKAS_SELFTEST_PLAYER_LIFECYCLE=1` to include graceful shutdown and verify the
+final marker. The original Virtools Player validation workflow belongs to
+`main`.
 
 ### Runtime Script Static Validation
 
@@ -115,7 +120,7 @@ paths that exist on that self-hosted runner:
 | --- | --- | --- |
 | `CKAS_RUN_SELFTESTS` | Plugin runtime | Truthy value runs startup self-tests in the host. |
 | `CKAS_SELFTEST_MARKER` | Plugin runtime / validation scripts | File path where startup self-test status is written. |
-| `CKAS_SELFTEST_PLAYER_LIFECYCLE` | Plugin runtime / validation scripts | Truthy value extends marker-based startup tests through original Player pause/play, reset/clear, and graceful `OnCKEnd`; the validation script sets it automatically with `-RunSelfTests`. |
+| `CKAS_SELFTEST_PLAYER_LIFECYCLE` | Plugin runtime / validation scripts | Truthy value extends marker-based startup tests through SDL Player pause/play, reset/clear, and graceful `OnCKEnd`; the validation script sets it automatically with `-RunSelfTests`. |
 | `CKAS_SCRIPT_ROOTS` | Script entry manager / validation scripts | Semicolon-separated extra script entry roots. |
 | `CKAS_SCRIPT_VALIDATE_ONLY` | Script entry manager | Compile discovered script entries without running runtime lifecycle callbacks. |
 | `CKAS_EXPORT_SCRIPT_API` | Plugin runtime / validation scripts | File path where the initialized `asIScriptEngine` API JSON is written. Requires a DLL built with `CKAS_ENABLE_API_EXPORT=ON`. |
@@ -159,7 +164,7 @@ Start with the first failure in the summary; later failures often cascade from i
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `AngelScript.dll` is not listed by a host exporter | DLL not copied to `BuildingBlocks`, dependency DLL missing, or wrong architecture | Rebuild Win32, install native dependencies, and use the host integration's validation command. |
+| CKAngelScript is not listed by a host exporter | Plugin missing from `BuildingBlocks`, missing dependency, or architecture mismatch | Build and install the plugin against the same NeMo2 and SDL packages as Player. |
 | Player starts but marker is missing | Self-tests not built or Player did not load the plugin | Configure with `-DCKAS_BUILD_SELF_TESTS=ON`, confirm plugin location. |
 | Marker says `failed` | A startup self-test failed | Read `stage` and `message`, then inspect `AngelScript.log`. |
 | Script entry is not discovered | Wrong root or missing `Scripts` directory | Pass `-ScriptRoot`, set `CKAS_SCRIPT_ROOTS`, or place modules under `Data\Scripts`. |

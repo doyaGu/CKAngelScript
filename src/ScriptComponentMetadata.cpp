@@ -1,4 +1,5 @@
 #include "ScriptComponentMetadata.h"
+#include "ScriptEngineCompat.h"
 
 #include <algorithm>
 #include <cctype>
@@ -260,7 +261,7 @@ CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptC
     }
 
     const std::string rawType = StripQuotes(typeName);
-    CK_CLASSID classId = CKStringToClassID(const_cast<CKSTRING>(rawType.c_str()));
+    CK_CLASSID classId = ScriptClassIdFromName(const_cast<CKSTRING>(rawType.c_str()));
     if (classId != 0) {
         return GuidFromClassId(context, classId);
     }
@@ -307,7 +308,7 @@ CKGUID GuidFromPropertyType(CKContext *context, asIScriptEngine *engine, int typ
         return registered;
     }
 
-    CK_CLASSID classId = CKStringToClassID(const_cast<CKSTRING>(name.c_str()));
+    CK_CLASSID classId = ScriptClassIdFromName(const_cast<CKSTRING>(name.c_str()));
     if (classId != 0) {
         return GuidFromClassId(context, classId);
     }
@@ -352,7 +353,7 @@ CK_CLASSID ClassIdFromPropertyType(asIScriptEngine *engine, int typeId) {
     }
 
     const std::string name = type->GetName();
-    CK_CLASSID sdkClassId = CKStringToClassID(const_cast<CKSTRING>(name.c_str()));
+    CK_CLASSID sdkClassId = ScriptClassIdFromName(const_cast<CKSTRING>(name.c_str()));
     if (sdkClassId != 0) {
         return sdkClassId;
     }

@@ -22,7 +22,7 @@ static const char *g_LevelStrings[6] = {
     "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"
 };
 
-static void FileCallback(const LogInfo &info) {
+static void FileCallback(LogInfo &info) {
     char buf[64];
     buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", info.time)] = '\0';
     FILE *fp = (FILE *) info.userdata;
@@ -64,9 +64,11 @@ Logger::~Logger() {
 
 void Logger::Log(LogLevel level, const char *format, va_list args) {
     if (m_File && level >= m_Level && level < LOG_LEVEL_OFF) {
-        LogInfo info = {args, format, nullptr, nullptr, level};
+        LogInfo info = {{}, format, nullptr, nullptr, level};
+        va_copy(info.ap, args);
         LogInfo::Init(info, m_File);
         FileCallback(info);
+        va_end(info.ap);
     }
 }
 

@@ -1,74 +1,70 @@
 # Getting Started
 
-This guide takes a clean checkout to a validated `AngelScript.dll`.
+CKAngelScript builds dynamic plugins for NeMo2 SDL and Virtools 2.1 Win32.
 
-## Prerequisites
+## Configure and Build
 
-- Windows.
-- Visual Studio 2022 with C++ build tools.
-- Virtools SDK 2.1 or newer.
-- DynCall, DynCallback, and DynLoad libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
-- AngelScript source under `deps/angelscript`; if it is missing, CMake downloads the SDK from AngelCode.
+Install CMake 3.25+, a C++20 compiler, and the CK2, VxMath and SDL3 development
+packages matching your Player. A full install of the matching NeMo2 build
+provides the CK2 and VxMath CMake packages. Use the SDL3 package selected by
+that build. CMake reuses those targets if a parent project supplies them.
 
-For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.39.0.zip`. Use `CKAS_ANGELSCRIPT_URL` and `CKAS_ANGELSCRIPT_SHA256` when pointing CMake at a mirror or a different SDK archive.
+```sh
+git submodule update --init --recursive
+cmake -S . -B build/sdl -DCMAKE_BUILD_TYPE=Release -DCKAS_RUNTIME=sdl \
+  -DCMAKE_PREFIX_PATH="/path/to/engine-sdk;/path/to/SDL-prefix"
+cmake --build build/sdl --config Release
+ctest --test-dir build/sdl -C Release --output-on-failure
+```
+
+Use a separate build directory per architecture. With Visual Studio, choose
+`-A Win32`, `-A x64`, or `-A ARM64` to match Player. CMake fetches the pinned
+AngelScript SDK if it is missing. For offline builds, pass
+`-DCKAS_ANGELSCRIPT_ARCHIVE=/path/to/angelscript_2.39.0.zip`. When using a mirror,
+set `CKAS_ANGELSCRIPT_URL` and `CKAS_ANGELSCRIPT_SHA256`.
 
 When upgrading from AngelScript 2.38.0, move the extracted `deps/angelscript`
 directory aside and use a fresh build directory. CMake will unpack the pinned SDK.
 
-The plugin is built as 32-bit for supported Virtools 2.x hosts.
+`CKAS_BUILD_CORE_TESTS` is enabled by default. CTest runs both the host-independent
+core tests and the engine integration test, which loads the actual plugin into
+a NeMo2 CK context without launching Player. `CKAS_BUILD_SELF_TESTS` adds tests
+that run inside a Player when enabled through the environment. DynCall is
+optional and requires matching DynCall, DynCallback, and DynLoad libraries.
 
-For an optional CTest that loads the original engine DLLs, point
-`CKAS_ENGINE_TEST_RUNTIME_DIR` at the installation directory containing
-`CK2.dll` and `VxMath.dll` (for Ballance, normally its `Bin` directory). Ballanced
-or other replacement CK2 builds are useful as source references, but are not a
-substitute for this compatibility gate.
+## Install and Package
 
-## Configure and Build
-
-```powershell
-git submodule update --init --recursive
-
-cmake -B build -G "Visual Studio 17 2022" -A Win32 `
-  -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
-  -DCKAS_ENABLE_DYNCALL=ON `
-  -DDYNCALL_ROOT=C:\Path\To\dyncall `
-  -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
-  -DDYNLOAD_ROOT=C:\Path\To\dyncall `
-  -DCKAS_BUILD_SELF_TESTS=ON
-
-cmake --build build --config Release
+```sh
+cmake --install build/sdl --config Release --prefix /path/to/stage
+cpack --config build/sdl/CPackConfig.cmake -C Release
 ```
 
-The DLL is written to:
+Copy the staged `BuildingBlocks` plugin into a matching Player:
+`AngelScript.dll` on Windows, `libAngelScript.so` on Linux, and
+`libAngelScript.dylib` on macOS. The ZIP includes the plugin and its public
+headers. Player supplies CK2, VxMath and SDL.
 
-```text
-build\src\Release\AngelScript.dll
-```
+When BML+ builds CKAngelScript itself, its runtime install already includes
+the matching plugin. When supplying the plugin separately, enable script
+support in the BML+ build and use the headers from this CKAngelScript build.
 
-Install it into the host:
+## Virtools Win32
 
-```powershell
-Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
-```
+Build with VS 2022, `-A Win32`, and `-DCKAS_RUNTIME=virtools`. Point
+`VIRTOOLS_SDK_PATH` at the Virtools 2.1 SDK and use a fresh build directory.
+Set `CKAS_ENGINE_TEST_RUNTIME_DIR` to the copy of BallancePlayer's `Bin`
+directory containing `CK2.dll` and `VxMath.dll` to enable the engine integration
+test. Install and package from this build directory using the same CMake
+commands as the SDL build. The archive contains the Win32 runtime and matching
+AngelScript headers.
 
-Create a distributable ZIP:
+## Generate the API reference
 
-```powershell
-cmake --build build --config Release --target PACKAGE
-```
-
-The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
-
-## Validate Locally
-
-Run the repeatable local workflow:
-
-```powershell
-tools\Validate-Local.ps1 -BuildDir build -Configuration Release
-```
-
-This configures and builds the plugin. Game- or application-specific launch
-automation belongs in the corresponding host integration project.
+Export the live script API JSON from the host, then configure with
+`CKAS_BUILD_API_DOCS=ON`, `CKAS_SCRIPT_API_JSON_INPUT` pointing to the export,
+and `CKAS_NATURALDOCS_EXECUTABLE` pointing to Natural Docs. Build the `docs-api`
+target. It writes HTML and the quality report under the build directory's
+`docs` folder. CPack includes the generated reference when it is available.
 
 ## First Runtime Script
 

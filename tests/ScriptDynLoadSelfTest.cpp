@@ -5,7 +5,11 @@
 #include <angelscript.h>
 #include <dyncall.h>
 #include <cstring>
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 namespace {
 
@@ -22,6 +26,7 @@ std::string EscapeScriptString(const std::string &value) {
 }
 
 bool GetCurrentModulePath(std::string &path) {
+#ifdef _WIN32
     HMODULE module = nullptr;
     if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             reinterpret_cast<LPCSTR>(&RunScriptDynLoadSelfTest),
@@ -36,6 +41,13 @@ bool GetCurrentModulePath(std::string &path) {
     }
 
     path.assign(buffer, length);
+#else
+    Dl_info module{};
+    if (!dladdr(reinterpret_cast<const void *>(&RunScriptDynLoadSelfTest), &module) || !module.dli_fname) {
+        return false;
+    }
+    path = module.dli_fname;
+#endif
     return true;
 }
 
