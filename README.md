@@ -1,7 +1,8 @@
 # CKAngelScript
 
-CKAngelScript integrates AngelScript into CK2. This branch builds the SDL plugin
-for NeMo2 and installs it into `BuildingBlocks`. It provides:
+CKAngelScript integrates AngelScript into CK2. It builds for NeMo2 SDL
+and Virtools 2.1 and installs the dynamic plugin into `BuildingBlocks`.
+It provides the following features.
 
 - Full low-level CK/Vx SDK bindings for scripts that need direct engine access.
 - `AngelScript Component`, a Building Block that attaches a script class to a behavior instance.
@@ -9,9 +10,9 @@ for NeMo2 and installs it into `BuildingBlocks`. It provides:
 - High-level `Scene`, `Behavior`/`BB`, `Param`, `Message`, and `Async` APIs.
 - Optional DynCall-backed native FFI helpers for advanced integrations.
 
-The `main` branch builds the plugin for original Virtools. The SDL plugin uses
-the same CK2, VxMath, and SDL libraries as its host. BML+ can build it as a
-CMake subproject or run with a matching prebuilt plugin.
+The SDL plugin uses the same CK2, VxMath and SDL libraries as its host.
+The Virtools Win32 plugin runs with the Virtools 2.1 SDK and BallancePlayer's
+x86 engine. BML+ can run with a prebuilt plugin for either runtime.
 
 ## Documentation Map
 
@@ -55,8 +56,22 @@ headers under `include`. Copy the plugin into the matching Player installation.
 Build a ZIP from the standalone stage with
 `cpack --config build/sdl/CPackConfig.cmake -C Release`.
 
-See [Getting Started](docs/getting-started.md) for installed paths, tests and
-optional features.
+### Build for BallancePlayer Win32
+
+Use the Virtools 2.1 SDK and the VS 2022 x86 tools. Test against a copy of the
+dynamic BallancePlayer runtime.
+
+```powershell
+cmake -S . -B build/virtools -G "Visual Studio 17 2022" -A Win32 -DCKAS_RUNTIME=virtools -DVIRTOOLS_SDK_PATH=C:/sdk/Virtools-SDK-2.1 -DCKAS_ENGINE_TEST_RUNTIME_DIR=C:/acceptance/Ballance/Bin
+cmake --build build/virtools --config Release
+ctest --test-dir build/virtools -C Release --output-on-failure
+cpack --config build/virtools/CPackConfig.cmake -C Release
+```
+
+Both archive names record the runtime, platform and architecture. The installed
+`share/CKAngelScript/CKAngelScript.runtime.json` also records the embedded
+AngelScript version. See [Getting Started](docs/getting-started.md) for tests
+and optional features.
 
 ## First Runtime Script
 

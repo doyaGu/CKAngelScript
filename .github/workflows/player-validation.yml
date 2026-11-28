@@ -56,6 +56,7 @@ jobs:
         run: |
           cmake -G Ninja -B build-player `
             -DCMAKE_BUILD_TYPE=Release `
+            -DCKAS_RUNTIME=virtools `
             -DCKAS_BUILD_CORE_TESTS=ON `
             -DCKAS_BUILD_SELF_TESTS=ON `
             -DCKAS_ENABLE_API_EXPORT=ON `

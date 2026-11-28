@@ -951,7 +951,7 @@ static bool IsSelfTestObjectDestroyed(CKContext *context, CK_ID id) {
     if (!id) {
         return false;
     }
-    CKObject *object = context->GetObject(id);
+    CKObject *object = CKGetObject(context, id);
     return !object || object->IsToBeDeleted();
 }
 

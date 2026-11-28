@@ -7,7 +7,11 @@
 #include <string>
 #include <vector>
 
+#if CKAS_RUNTIME_SDL
 #include <SDL3/SDL_events.h>
+#else
+#include <windows.h>
+#endif
 
 #include "Logger.h"
 #include "ScriptCKPrototypeHook.h"
@@ -164,6 +168,25 @@ bool ExpectManagerTracePrefix(std::initializer_list<const char *> expected) {
     return true;
 }
 
+#if CKAS_RUNTIME_SDL
+constexpr const char *kCloseRequestEvent = "SDL_EVENT_WINDOW_CLOSE_REQUESTED.posted";
+
+bool RequestPlayerClose(CKContext &context) {
+    auto *window = static_cast<SDL_Window *>(context.GetMainWindow());
+    SDL_Event close{};
+    close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+    close.window.windowID = window ? SDL_GetWindowID(window) : 0;
+    return close.window.windowID && SDL_PushEvent(&close);
+}
+#else
+constexpr const char *kCloseRequestEvent = "WM_CLOSE.posted";
+
+bool RequestPlayerClose(CKContext &context) {
+    const auto window = static_cast<HWND>(context.GetMainWindow());
+    return window && PostMessageW(window, WM_CLOSE, 0, 0);
+}
+#endif
+
 bool ManagerEndTraceMatches() {
     const std::vector<std::string> prefix = {
         "CKContext.Pause",
@@ -172,7 +195,7 @@ bool ManagerEndTraceMatches() {
         "CKContext.Play",
         "OnCKPlay",
         "CKContext.Play.return",
-        "SDL_EVENT_WINDOW_CLOSE_REQUESTED.posted",
+        kCloseRequestEvent,
     };
     const std::vector<std::string> &events = PlayerLifecycleTrace.ManagerEvents;
     if (events.size() < prefix.size() + 2 ||
@@ -286,12 +309,12 @@ bool BeginPlayerLifecycleTrace(ScriptManager *manager,
     // the first subsequent Play call.
     if (context->IsReseted()) {
         if (context->Pause() != CK_OK || context->IsPlaying()) {
-            return fail("SDL Player could not pause its bootstrap reset state.");
+            return fail("Player could not pause its bootstrap reset state.");
         }
         const CKERROR bootstrapPlayError = context->Play();
         if ((bootstrapPlayError != CK_OK && bootstrapPlayError != CKERR_NOCURRENTLEVEL) ||
             !context->IsPlaying() || context->IsReseted()) {
-            return fail("SDL Player could not normalize its bootstrap reset state "
+            return fail("Player could not normalize its bootstrap reset state "
                         "(CKERROR=" + std::to_string(bootstrapPlayError) + ").");
         }
     }
@@ -311,7 +334,7 @@ bool BeginPlayerLifecycleTrace(ScriptManager *manager,
     PlayerLifecycleTrace.ManagerEvents.push_back("CKContext.Pause");
     if (context->Pause() != CK_OK || context->IsPlaying() ||
         !ExpectManagerTracePrefix({"CKContext.Pause", "OnCKPause"})) {
-        return fail("SDL Player did not dispatch manager OnCKPause through CKContext::Pause.");
+        return fail("Player did not dispatch manager OnCKPause through CKContext::Pause.");
     }
     PlayerLifecycleTrace.ManagerEvents.push_back("CKContext.Pause.return");
     PlayerLifecycleTrace.ManagerEvents.push_back("CKContext.Play");
@@ -326,7 +349,7 @@ bool BeginPlayerLifecycleTrace(ScriptManager *manager,
     const bool acceptedOriginalPlayResult =
         playError == CK_OK || playError == CKERR_NOCURRENTLEVEL;
     if (!acceptedOriginalPlayResult || !playingAfterPlay || !playTraceMatches) {
-        return fail("SDL Player did not complete CKContext::Play after manager OnCKPlay "
+        return fail("Player did not complete CKContext::Play after manager OnCKPlay "
                     "(CKERROR=" + std::to_string(playError) +
                     ", playing=" + std::to_string(static_cast<int>(playingAfterPlay)) +
                     ", traceMatches=" + (playTraceMatches ? "true" : "false") + ").");
@@ -350,14 +373,10 @@ bool BeginPlayerLifecycleTrace(ScriptManager *manager,
         return fail("Pause/Play changed the terminal state of a suspended public execution.");
     }
 
-    auto *window = static_cast<SDL_Window *>(context->GetMainWindow());
-    SDL_Event close{};
-    close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
-    close.window.windowID = window ? SDL_GetWindowID(window) : 0;
-    if (!close.window.windowID || !SDL_PushEvent(&close)) {
+    if (!RequestPlayerClose(*context)) {
         return fail("Player lifecycle trace could not request a graceful Player close.");
     }
-    PlayerLifecycleTrace.ManagerEvents.push_back("SDL_EVENT_WINDOW_CLOSE_REQUESTED.posted");
+    PlayerLifecycleTrace.ManagerEvents.push_back(kCloseRequestEvent);
     PlayerLifecycleTrace.AwaitingEnd = true;
     WriteStartupSelfTestMarker("running",
                                "manager-end",
@@ -464,7 +483,7 @@ CKERROR CompleteScriptManagerLifecycleSelfTest(ScriptManager *manager) {
     if (!PlayerLifecycleTrace.EndPreparationFailure.empty()) {
         failure = PlayerLifecycleTrace.EndPreparationFailure;
     } else if (!ManagerEndTraceMatches()) {
-        failure = "SDL Player manager lifecycle callbacks were not delivered in the required order.";
+        failure = "Player manager lifecycle callbacks were not delivered in the required order.";
     } else if (!api.IsValid() || !PlayerLifecycleTrace.Execution) {
         failure = "Player OnCKEnd lost the public execution test handle.";
     } else if (stateStatus != CKAS_OK ||

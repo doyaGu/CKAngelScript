@@ -15,6 +15,14 @@
 #include "ScriptParameterConversion.h"
 #include "ScriptRegistration.h"
 
+#if CKAS_RUNTIME_SDL
+namespace {
+asSFuncPtr GetCKGroupObjectMethod() {
+    return asMETHODPR(CKGroup, GetObject, (int), CKBeObject*);
+}
+}
+#endif
+
 #undef GetObject
 
 namespace {
@@ -171,7 +179,7 @@ D *CKObjectDowncast(B *base) {
 
 #if CKAS_RUNTIME_SDL
     if constexpr (std::is_same_v<D, CKInterfaceObjectManager>) {
-        return CKIsChildClassOf(base->GetClassID(), D::m_ClassID) ? static_cast<D *>(base) : nullptr;
+        return CKIsChildClassOf(base->GetClassID(), CKCID_INTERFACEOBJECTMANAGER) ? static_cast<D *>(base) : nullptr;
     } else
 #endif
     return D::Cast(base);
@@ -285,7 +293,7 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
 }
 
 template <>
-static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char *name) {
+void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
     r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR([](CKScene *self, const std::string &name, bool shared) { self->SetName(const_cast<CKSTRING>(name.c_str()), shared); }, (CKScene *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -2047,7 +2055,7 @@ static void RegisterCKBeObjectMembers(asIScriptEngine *engine, const char *name)
 }
 
 template <>
-static void RegisterCKBeObjectMembers<CKWaveSound>(asIScriptEngine *engine, const char *name) {
+void RegisterCKBeObjectMembers<CKWaveSound>(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
     RegisterCKSceneObjectMembers<CKWaveSound>(engine, name);
@@ -2230,7 +2238,7 @@ void RegisterCKGroup(asIScriptEngine *engine) {
 
     // Object Access
 #if CKAS_RUNTIME_SDL
-    r = engine->RegisterObjectMethod("CKGroup", "CKBeObject@ GetObject(int)", asMETHODPR(CKGroup, GetObject, (int), CKBeObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGroup", "CKBeObject@ GetObject(int)", GetCKGroupObjectMethod(), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #else
     r = engine->RegisterObjectMethod("CKGroup", "CKBeObject@ GetObject(int)", asMETHODPR(CKGroup, GetObjectA, (int), CKBeObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
@@ -3339,7 +3347,7 @@ static void RegisterCKSoundMembers(asIScriptEngine *engine, const char *name) {
 }
 
 template <>
-static void RegisterCKSoundMembers<CKWaveSound>(asIScriptEngine *engine, const char *name) {
+void RegisterCKSoundMembers<CKWaveSound>(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);
 
     int r = 0;

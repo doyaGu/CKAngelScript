@@ -1,6 +1,6 @@
 # Getting Started
 
-The `sdl` branch builds CKAngelScript as a dynamic NeMo2 plugin. Use the
+CKAngelScript builds dynamic plugins for NeMo2 SDL and Virtools 2.1 Win32. Use the
 `main` branch for the original Virtools SDK and Player.
 
 ## Configure and Build
@@ -47,6 +47,16 @@ headers. Player supplies CK2, VxMath and SDL.
 When BML+ builds CKAngelScript itself, its runtime install already includes
 the matching plugin. When supplying the plugin separately, enable script
 support in the BML+ build and use the headers from this CKAngelScript build.
+
+## Virtools Win32
+
+Build with VS 2022, `-A Win32`, and `-DCKAS_RUNTIME=virtools`. Point
+`VIRTOOLS_SDK_PATH` at the Virtools 2.1 SDK and use a fresh build directory.
+Set `CKAS_ENGINE_TEST_RUNTIME_DIR` to the copy of BallancePlayer's `Bin`
+directory containing `CK2.dll` and `VxMath.dll` to enable the engine integration
+test. Install and package from this build directory using the same CMake
+commands as the SDL build. The archive contains the Win32 runtime and matching
+AngelScript headers.
 
 ## First Runtime Script
 

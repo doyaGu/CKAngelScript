@@ -1,5 +1,6 @@
 #include "ScriptXObjectArray.h"
 
+#include "CKObject.h"
 #include "XObjectArray.h"
 
 #include "ScriptXArray.h"
@@ -29,6 +30,15 @@ bool XObjectPointerArrayCheck(T *self) {
 
 void XSObjectArrayConvertToObjects(const XSObjectArray *self, CKContext *context, XSObjectPointerArray &objArray) {
     self->ConvertToObjects(context, objArray);
+}
+
+// CK2.dll does not export XSObjectArray::ConvertFromObjects.
+void XSObjectArrayConvertFromObjects(XSObjectArray *self, const XSObjectPointerArray &objects) {
+    self->Clear();
+    for (auto current = objects.Begin(); current != objects.End(); ++current) {
+        if (auto *object = *current)
+            self->PushBack(object->GetID());
+    }
 }
 
 void XObjectArrayConvertToObjects(const XObjectArray *self, CKContext *context, XObjectPointerArray &objArray) {
@@ -105,7 +115,7 @@ void RegisterXSObjectArray(asIScriptEngine *engine) {
     RegisterXSArray<XSObjectArray, CK_ID>(engine, "XSObjectArray", "CK_ID");
 
     r = engine->RegisterObjectMethod("XSObjectArray", "void ConvertToObjects(CKContext@ context, XSObjectPointerArray &out objArray) const", asFUNCTION(XSObjectArrayConvertToObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XSObjectArray", "void ConvertFromObjects(const XSObjectPointerArray &in objArray)", asMETHODPR(XSObjectArray, ConvertFromObjects, (const XSArray<CKObject *> &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XSObjectArray", "void ConvertFromObjects(const XSObjectPointerArray &in objArray)", asFUNCTION(XSObjectArrayConvertFromObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XSObjectArray", "bool Check(CKContext@ context)", asFUNCTION(XSObjectArrayCheck), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XSObjectArray", "bool AddIfNotHere(CK_ID id)", asFUNCTIONPR(XObjectArrayAddIfNotHereId<XSObjectArray>, (XSObjectArray *, CK_ID), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XSObjectArray", "bool AddIfNotHere(CKObject@ obj)", asFUNCTIONPR(XObjectArrayAddIfNotHereObject<XSObjectArray>, (XSObjectArray *, CKObject *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

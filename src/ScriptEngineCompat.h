@@ -44,7 +44,7 @@ inline CKSTRING ScriptClassNameFromId(CK_CLASSID id) {
     return "Invalid Class Identifier";
 }
 
-inline CK_CLASSID ScriptClassIdFromName(CKSTRING name) {
+inline CK_CLASSID ScriptClassIdFromName(const char *name) {
     if (name) {
         const int count = CKGetClassCount();
         for (CK_CLASSID id = 1; id < count; ++id) {
@@ -58,5 +58,13 @@ inline CK_CLASSID ScriptClassIdFromName(CKSTRING name) {
         }
     }
     return 0;
+}
+#else
+inline CKSTRING ScriptClassNameFromId(CK_CLASSID id) {
+    return CKClassIDToString(id);
+}
+
+inline CK_CLASSID ScriptClassIdFromName(const char *name) {
+    return CKStringToClassID(const_cast<CKSTRING>(name));
 }
 #endif
