@@ -7715,7 +7715,7 @@ class CKPARAMETER_DESC {
     void set_DefaultValue(NativePointer ptr);
     void set_DefaultValueString(const string&in value);
     void set_Name(const string&in value);
-    int DefaultValueSize;
+    const int DefaultValueSize;
     CKGUID Guid;
     int Owner;
     int Type;

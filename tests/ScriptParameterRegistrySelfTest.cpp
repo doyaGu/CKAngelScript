@@ -11673,6 +11673,16 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not find CKPARAMETER_DESC.";
         return false;
     }
+    bool hasReadOnlyDefaultValueSize = false;
+    for (asUINT index = 0; index < parameterDescType->GetPropertyCount(); ++index) {
+        const char *declaration = parameterDescType->GetPropertyDeclaration(index);
+        if (declaration && std::strcmp(declaration, "const int DefaultValueSize") == 0)
+            hasReadOnlyDefaultValueSize = true;
+    }
+    if (!hasReadOnlyDefaultValueSize) {
+        error = "CKPARAMETER_DESC must expose DefaultValueSize as read-only.";
+        return false;
+    }
     if (parameterDescType->GetMethodByDecl("NativePointer get_DefaultValue() const") == nullptr ||
         parameterDescType->GetMethodByDecl("void set_DefaultValue(NativePointer ptr)") == nullptr ||
         parameterDescType->GetMethodByDecl("bool SetDefaultValue(NativeBuffer@ data)") == nullptr) {

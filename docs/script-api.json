@@ -236732,7 +236732,7 @@
         {
           "docId": "property::::ckparameter_desc::int defaultvaluesize",
           "name": "DefaultValueSize",
-          "declaration": "int DefaultValueSize",
+          "declaration": "const int DefaultValueSize",
           "memberRole": "property",
           "type": "int",
           "isPrivate": false,

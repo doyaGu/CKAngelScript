@@ -3147,7 +3147,7 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "int Type", asOFFSET(CKPARAMETER_DESC, Type)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "uintptr_t DefaultValueString", asOFFSET(CKPARAMETER_DESC, DefaultValueString)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "uintptr_t DefaultValue", asOFFSET(CKPARAMETER_DESC, DefaultValue)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "int DefaultValueSize", asOFFSET(CKPARAMETER_DESC, DefaultValueSize)); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "const int DefaultValueSize", asOFFSET(CKPARAMETER_DESC, DefaultValueSize)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPARAMETER_DESC", "int Owner", asOFFSET(CKPARAMETER_DESC, Owner)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKPARAMETER_DESC", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPARAMETER_DESC *self) { new(self) CKPARAMETER_DESC(); }, (CKPARAMETER_DESC*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
