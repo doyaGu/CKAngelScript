@@ -16,10 +16,8 @@
 #include "ScriptRegistration.h"
 
 #if CKAS_RUNTIME_SDL
-namespace {
-asSFuncPtr GetCKGroupObjectMethod() {
+static asSFuncPtr GetCKGroupObjectMethod() {
     return asMETHODPR(CKGroup, GetObject, (int), CKBeObject*);
-}
 }
 #endif
 

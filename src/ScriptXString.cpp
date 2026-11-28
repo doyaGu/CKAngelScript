@@ -8,8 +8,7 @@
 #include "XString.h"
 #include "ScriptRegistration.h"
 
-namespace {
-XWORD XStringReverseFind(const XString *string, char character, XWORD start) {
+static XWORD XStringReverseFind(const XString *string, char character, XWORD start) {
     const auto length = static_cast<std::size_t>(string->Length());
     if (length == 0)
         return XString::NOTFOUND;
@@ -20,7 +19,6 @@ XWORD XStringReverseFind(const XString *string, char character, XWORD start) {
             return static_cast<XWORD>(end - 1);
     }
     return XString::NOTFOUND;
-}
 }
 
 namespace std {
